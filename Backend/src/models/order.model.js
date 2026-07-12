@@ -1,5 +1,10 @@
 import mongoose,{Schema} from "mongoose";
 
+export const OrderStatus=Object.freeze({
+    PENDING:"pending",
+    PAID:"paid",
+    FAILED:"failed"
+})
 const orderSchema=new Schema({
     userId:{
         type:Schema.Types.ObjectId,
@@ -19,10 +24,10 @@ const orderSchema=new Schema({
     },
     status:{
         type:String,
-        enum:["pending","paid","failed"],
-        default:"pending"
+        enum:Object.values(OrderStatus),
+        default:OrderStatus.PENDING
     }
 },{timestamps:true})
 
-const order=mongoose.model("Order",orderSchema)
-export default order
+const Order=mongoose.model("Order",orderSchema)
+export default Order

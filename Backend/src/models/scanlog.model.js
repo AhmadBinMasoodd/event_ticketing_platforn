@@ -1,5 +1,9 @@
 import mongoose,{Schema} from "mongoose";
 
+export const ScanResult=Object.freeze({
+    SUCCESS:"success",
+    FAILURE:"failure"
+})
 const scanLogSchema=new Schema({
     ticketId:{
         type:Schema.Types.ObjectId,
@@ -15,10 +19,11 @@ const scanLogSchema=new Schema({
     },
     result:{
         type:String,
-        enum:["success","failure"],
+        enum:Object.values(ScanResult),
+        default:ScanResult.FAILURE
     },
 
 },{timestamps:true})
 
-const scanLog=mongoose.model("ScanLog",scanLogSchema)
-export default scanLog
+const ScanLog=mongoose.model("ScanLog",scanLogSchema)
+export default ScanLog

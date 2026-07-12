@@ -1,5 +1,11 @@
 import mongoose, { Schema } from "mongoose";
 
+export const EventStatus = Object.freeze({
+    UPCOMING: "upcoming",
+    ONGOING: "ongoing",
+    COMPLETED: "completed"
+});
+
 const eventSchema = new Schema({
     title:{
         type:String,
@@ -24,10 +30,10 @@ const eventSchema = new Schema({
     },
     status:{
         type:String,
-        enum:["upcoming","ongoing","completed"],
-        default:"upcoming"
+        enum:Object.values(EventStatus),
+        default:EventStatus.UPCOMING
     }
 }, { timestamps: true });
 
-const event = mongoose.model("Event", eventSchema);
-export default event;
+const Event = mongoose.model("Event", eventSchema);
+export default Event;

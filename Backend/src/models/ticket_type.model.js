@@ -27,5 +27,5 @@ const ticketTypeSchema=new Schema({
     }
 },{ timestamps:true})
 
-const ticketType=mongoose.model("TicketType",ticketTypeSchema)
-export default ticketType
+const TicketType=mongoose.model("TicketType",ticketTypeSchema)
+export default TicketType

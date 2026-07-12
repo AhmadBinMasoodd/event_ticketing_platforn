@@ -30,4 +30,63 @@ const registerUser = asyncHandler(async (req, res) => {
     .status(201)
     .json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
-export default registerUser;
+
+const generateAccessAndRefreshTokens = async (userId) => {
+  try{
+    const user =await User.findById(userId)
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    await user.save({validateBeforeSave:false})
+    return{accessToken,refreshToken}
+
+  }catch(err){
+    console.log(err)
+    throw new ApiError(500,"Error while generating access and refresh tokens")
+  }
+}
+
+const loginUser = asyncHandler(async (req, res) => {
+
+  //get the user details from front end
+  const { email, password } = req.body;
+  //check if the user already exists
+  if(!email || !password){
+    throw new ApiError(400,"Email and password are required")
+  }
+  //check if the user exists in the database
+  const user= await User.findOne({ email }).select("+password")
+  if(!user){
+    throw new ApiError(404,"User not found")
+  }
+  //check if the password is correct
+  const isPasswordCorrect=await user.isPasswordCorrect(password)
+  if(!isPasswordCorrect){
+    throw new ApiError(401,"Invalid Credentials")
+  }
+  //generate access and refresh tokens
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+  const loggedInUser = await User.findById(user._id);
+  const options={
+    httpOnly:true,
+    secure:true
+  }
+  return res
+  .status(200)
+  .cookie("refreshToken", refreshToken, options)
+  .json(
+    new ApiResponse(
+      200,
+      {
+        user: loggedInUser,
+        accessToken,
+        refreshToken,
+      },
+      "User logged in successfully"
+    )
+  )
+
+
+})
+export { registerUser, loginUser };

@@ -1,5 +1,9 @@
 import mongoose,{Schema} from "mongoose";
-
+export const TicketStatus=Object.freeze({
+    ACTIVE:"active",
+    USED:"used",
+    CANCELLED:"cancelled"
+})
 const ticketSchema=new Schema({
     ticketTypeId:{
         type:Schema.Types.ObjectId,
@@ -27,8 +31,8 @@ const ticketSchema=new Schema({
     },
     status:{
         type:String,
-        enum:["active","used","cancelled"],
-        default:"active"
+        enum:Object.values(TicketStatus),
+        default:TicketStatus.ACTIVE
     },
     scannedAt:{
         type:Date,
@@ -38,7 +42,7 @@ const ticketSchema=new Schema({
         type:Schema.Types.ObjectId,
         ref:"User",
     }
-})
+},{timestamps:true})
 
-const ticket=mongoose.model("Ticket",ticketSchema)
-export default ticket
+const Ticket=mongoose.model("Ticket",ticketSchema)
+export default Ticket
