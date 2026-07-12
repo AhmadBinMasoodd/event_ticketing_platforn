@@ -74,6 +74,7 @@ const loginUser = asyncHandler(async (req, res) => {
   }
   return res
   .status(200)
+  .cookie("accessToken", accessToken, options)
   .cookie("refreshToken", refreshToken, options)
   .json(
     new ApiResponse(
@@ -89,4 +90,34 @@ const loginUser = asyncHandler(async (req, res) => {
 
 
 })
-export { registerUser, loginUser };
+
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndDelete(
+    req.user._id,
+    {
+      $set:{
+        refreshToken:undefined
+      }
+    },
+    {
+      new:true
+    }
+    
+  );
+  const options={
+    httpOnly:true,
+    secure:true
+  }
+  return res
+  .status(200)
+  .clearCookie("refreshToken", options)
+  .clearCookie("accessToken", options)
+  .json(
+    new ApiResponse(
+      200,
+      null,
+      "User logged out successfully"
+    )
+  )
+})
+export { registerUser, loginUser, logoutUser };
