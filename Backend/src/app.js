@@ -22,6 +22,8 @@ app.use(express.urlencoded(
 app.use(express.static("public"))
 app.use(cookieParser());
 import userRoutes from './routes/user.routes.js';
+import organizerRoutes from './routes/organizer.routes.js';
 app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/organizers", organizerRoutes);
 
 export default app;
