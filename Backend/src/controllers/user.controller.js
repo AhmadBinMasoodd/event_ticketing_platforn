@@ -214,6 +214,41 @@ const updatePassword = asyncHandler(async (req, res) => {
         );
 });
 
+const updateUser = asyncHandler(async (req, res) => {
+    const { name, email, phone } = req.body;
+
+    if (!name && !email && !phone) {
+        throw new ApiError(400, "At least one field is required to update");
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    try {
+        user.name = name ?? user.name;
+        user.email = email ?? user.email;
+        user.phone = phone ?? user.phone;
+
+        const updatedUser = await user.save();
+
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(200, updatedUser, "User updated successfully")
+            );
+    } catch (error) {
+        if (error.code === 11000) {
+            const duplicateField = Object.keys(error.keyValue)[0];
+
+            throw new ApiError(409, `${duplicateField} already exists`);
+        }
+
+        throw new ApiError(500, error?.message ||"Error while updating user");
+    }
+});
 
 export {
     registerUser,
@@ -222,4 +257,5 @@ export {
     getCurrentUser,
     refreshAccessToken,
     updatePassword,
+    updateUser,
 };
