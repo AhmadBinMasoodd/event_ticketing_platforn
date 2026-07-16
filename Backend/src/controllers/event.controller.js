@@ -2,6 +2,8 @@ import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/apiError.js";
 import Event from "../models/event.model.js";
 import ApiResponse from "../utils/apiResponse.js";
+import Organizer from "../models/organizer.model.js";
+
 
 const createEvent = asyncHandler(async (req, res) => {
     const {
@@ -67,6 +69,7 @@ const getMyEvents = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, events, "Events fetched successfully"));
 });
+
 const getEventById = asyncHandler(async (req, res) => {
     const { eventId } = req.params;
 
@@ -89,6 +92,7 @@ const getEventById = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, event, "Event fetched successfully"));
 });
+
 const updateEvent = asyncHandler(async (req, res) => {
     const { eventId } = req.params;
 
