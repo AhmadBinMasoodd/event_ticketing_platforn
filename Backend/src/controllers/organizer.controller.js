@@ -2,7 +2,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/apiError.js";
 import Organizer from "../models/organizer.model.js";
 import ApiResponse from "../utils/apiResponse.js";
-import { Roles } from "../models/user.model.js";
+import User, { Roles } from "../models/user.model.js";
 
 const createOrganizer = asyncHandler(async (req, res) => {
     //get the organizer details from front end
