@@ -6,6 +6,9 @@ import {
     getEventById,
     updateEvent,
     deleteEvent,
+    publishEvent,
+    unpublishEvent,
+    getPublishedEvents
 } from "../controllers/event.controller.js";
 
 import { verifyJWT, authorizeRoles } from "../middlewares/auth.middleware.js";
@@ -34,5 +37,9 @@ router
     .delete(
         deleteEvent
     );
+
+router.patch("/:eventId/publish", publishEvent);
+router.patch("/:eventId/unpublish", unpublishEvent);
+router.get("/published", getPublishedEvents);
 
 export default router;

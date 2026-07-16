@@ -143,6 +143,7 @@ const updateEvent = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, updatedEvent, "Event updated successfully"));
 });
+
 const deleteEvent = asyncHandler(async (req, res) => {
     const { eventId } = req.params;
 
@@ -167,5 +168,62 @@ const deleteEvent = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, null, "Event deleted successfully"));
 });
+const publishEvent = asyncHandler(async (req, res) => {
+    // Get the eventId from the request parameters
+    const { eventId } = req.params;
+    // Find the event by its ID
+    const event = await Event.findById(eventId);
+    if (!event) {
+        throw new ApiError(404, "Event not found");
+    }
+    // Check if the user is the owner of the organizer associated with the event
+    const organizer = await Organizer.findOne({
+        _id: event.organizer,
+        owner: req.user._id,
+    });
+    if (!organizer) {
+        throw new ApiError(403, "You are not authorized to publish this event");
+    }
 
-export { createEvent, getMyEvents, getEventById, updateEvent, deleteEvent };
+    event.isPublished = true;
+    const updatedEvent = await event.save();
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedEvent, "Event published successfully"));
+});
+const unpublishEvent = asyncHandler(async (req, res) => {
+    const { eventId } = req.params;
+    // Find the event by its ID
+    const event = await Event.findById(eventId);
+    if (!event) {
+        throw new ApiError(404, "Event not found");
+    }
+    //identify the organizer
+    const organizer = await Organizer.findOne({
+        _id: event.organizer,
+        owner: req.user._id,
+    });
+    if (!organizer) {
+        throw new ApiError(403, "You are not authorized to unpublish this event");
+    }
+    event.isPublished = false;
+    const updatedEvent = await event.save();
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedEvent, "Event unpublished successfully"));
+});
+
+const getPublishedEvents = asyncHandler(async (req, res) => {
+    const events = await Event.find({ isPublished: true }).populate("organizer");
+    if(events.length === 0){
+        return res
+        .status(200)
+        .json(new ApiResponse(200, [], "No published events found"));
+    }
+    return res
+        .status(200)
+        .json(new ApiResponse(200, events, "Published events fetched successfully"));
+})
+export { createEvent, getMyEvents, getEventById, updateEvent, deleteEvent, publishEvent, unpublishEvent, getPublishedEvents};
