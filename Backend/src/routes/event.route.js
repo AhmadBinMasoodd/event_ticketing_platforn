@@ -41,5 +41,5 @@ router
 router.patch("/:eventId/publish", publishEvent);
 router.patch("/:eventId/unpublish", unpublishEvent);
 router.get("/published", getPublishedEvents);
-
+router.get("/public", getPublishedEvents);
 export default router;

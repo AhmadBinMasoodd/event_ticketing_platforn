@@ -216,14 +216,82 @@ const unpublishEvent = asyncHandler(async (req, res) => {
 });
 
 const getPublishedEvents = asyncHandler(async (req, res) => {
-    const events = await Event.find({ isPublished: true }).populate("organizer");
-    if(events.length === 0){
-        return res
-        .status(200)
-        .json(new ApiResponse(200, [], "No published events found"));
+    // Read query parameters
+    const {
+        search = "",
+        city,
+        status,
+        sort = "eventDate",
+        order = "asc",
+        page = 1,
+        limit = 10,
+    } = req.query;
+
+    // Build dynamic query
+    const query = {
+        isPublished: true,
+    };
+
+    // Search by title or description
+    if (search) {
+        query.$or = [
+            {
+                title: {
+                    $regex: search,
+                    $options: "i",
+                },
+            },
+            {
+                description: {
+                    $regex: search,
+                    $options: "i",
+                },
+            },
+        ];
     }
-    return res
-        .status(200)
-        .json(new ApiResponse(200, events, "Published events fetched successfully"));
-})
+
+    // Filter by city
+    if (city) {
+        query.city = city;
+    }
+
+    // Filter by status
+    if (status) {
+        query.status = status;
+    }
+
+    // Pagination
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Sorting
+    const sortQuery = {
+        [sort]: order === "desc" ? -1 : 1,
+    };
+
+    // Fetch events
+    const events = await Event.find(query)
+        .populate("organizer")
+        .sort(sortQuery)
+        .skip(skip)
+        .limit(limitNumber);
+
+    // Total documents matching filters
+    const totalEvents = await Event.countDocuments(query);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                events,
+                currentPage: pageNumber,
+                totalPages: Math.ceil(totalEvents / limitNumber),
+                totalEvents,
+                limit: limitNumber,
+            },
+            "Published events fetched successfully"
+        )
+    );
+});
 export { createEvent, getMyEvents, getEventById, updateEvent, deleteEvent, publishEvent, unpublishEvent, getPublishedEvents};
