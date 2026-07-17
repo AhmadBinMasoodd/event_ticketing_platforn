@@ -33,7 +33,11 @@ const createTicketType = asyncHandler(async (req, res) => {
         quantity,
         saleEnd,
     });
-    return res.status(201).json(new ApiResponse(201, ticketType, "Ticket type created successfully"));
+    return res
+    .status(201)
+    .json(
+        new ApiResponse(201, ticketType, "Ticket type created successfully")
+    );
 })
 
 const getEventTicketTypes = asyncHandler(async (req, res) => {

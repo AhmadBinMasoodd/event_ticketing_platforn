@@ -24,8 +24,10 @@ app.use(cookieParser());
 import userRoutes from './routes/user.routes.js';
 import organizerRoutes from './routes/organizer.routes.js';
 import eventRoutes from './routes/event.route.js';
+import TicketTypeRoutes from './routes/ticketType.route.js';
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/organizers", organizerRoutes);
 app.use("/api/v1/events", eventRoutes);
+app.use("/api/v1/ticket-types", TicketTypeRoutes);
 
 export default app;
