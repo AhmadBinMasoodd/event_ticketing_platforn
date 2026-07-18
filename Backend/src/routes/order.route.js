@@ -2,7 +2,8 @@ import { Router } from "express";
 
 import {
     createOrder,
-    approveOrder
+    approveOrder,
+    getOrders
 } from "../controllers/order.controller.js";
 
 import {
@@ -17,5 +18,6 @@ router.use(verifyJWT);
 // Create Order
 router.post("/",authorizeRoles(Roles.CUSTOMER), createOrder);
 router.patch("/:orderId/approve",authorizeRoles(Roles.ORGANIZER), approveOrder);
+router.get("/",authorizeRoles( Roles.ORGANIZER), getOrders);
 
 export default router;

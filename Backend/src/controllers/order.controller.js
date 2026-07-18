@@ -176,7 +176,82 @@ const approveOrder = asyncHandler(async (req, res) => {
         )
     );
 });
-const getPendingOrders = asyncHandler(async (req, res) => {
 
-})
-export { createOrder, approveOrder, getPendingOrders };
+const getOrders = asyncHandler(async (req, res) => {
+    const { status } = req.query;
+
+    // Validate status (if provided)
+    if (
+        status &&
+        !Object.values(OrderStatus).includes(status)
+    ) {
+        throw new ApiError(400, "Invalid order status");
+    }
+
+    // Verify organizer
+    const organizer = await Organizer.findOne({
+        owner: req.user._id,
+    });
+
+    if (!organizer) {
+        throw new ApiError(
+            403,
+            "You are not authorized to view orders"
+        );
+    }
+
+    // Get organizer events
+    const events = await Event.find({
+        organizer: organizer._id,
+    }).select("_id");
+
+    const eventIds = events.map(event => event._id);
+
+    if (eventIds.length === 0) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                [],
+                "You have not created any events yet"
+            )
+        );
+    }
+
+    // Build query dynamically
+    const query = {
+        eventId: { $in: eventIds },
+    };
+
+    if (status) {
+        query.status = status;
+    }
+
+    // Fetch orders
+    const orders = await Order.find(query)
+        .populate("userId", "name email phone")
+        .populate("eventId", "title eventDate venue city")
+        .populate("ticketTypeId", "name price")
+        .sort({ createdAt: -1 });
+
+    if (orders.length === 0) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                [],
+                status
+                    ? `No ${status} orders found`
+                    : "No orders found"
+            )
+        );
+    }
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            orders,
+            "Orders retrieved successfully"
+        )
+    );
+});
+
+export { createOrder, approveOrder, getOrders };
