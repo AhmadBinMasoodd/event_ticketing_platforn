@@ -5,7 +5,9 @@ import ApiResponse from "../utils/apiResponse.js";
 import TicketType from "../models/ticket_type.model.js";
 import Order from "../models/order.model.js";
 import { OrderStatus } from "../models/order.model.js";
-
+import Ticket from "../models/ticket.model.js";
+import Organizer from "../models/organizer.model.js";
+import crypto from "crypto";
 const createOrder = asyncHandler(async (req, res) => {
     const {
         eventId,
@@ -110,4 +112,71 @@ const createOrder = asyncHandler(async (req, res) => {
     );
 });
 
-export { createOrder };
+const approveOrder = asyncHandler(async (req, res) => {
+    const { orderId } = req.params;
+    if(!orderId) {
+        throw new ApiError(400, "Order ID is required");
+    }
+    const order = await Order.findById(orderId);
+    if(!order) {
+        throw new ApiError(404, "Order not found");
+    }
+    const event = await Event.findById(order.eventId);
+    if(!event) {
+        throw new ApiError(404, "Event not found");
+    }
+    const organizer = await Organizer.findOne({
+        _id: event.organizer,
+        owner: req.user._id,
+    });
+
+
+    if (!organizer) {
+        throw new ApiError(403, "You are not authorized to approve this order");
+    }
+    const ticketType = await TicketType.findById(order.ticketTypeId);
+    if(!ticketType) {
+        throw new ApiError(404, "Ticket type not found");
+    }
+    const availableTickets = ticketType.quantity - ticketType.sold;
+    if (availableTickets < order.quantity) {
+        throw new ApiError(400, "Not enough tickets available to approve this order");
+    }
+
+    if(order.status !== OrderStatus.PENDING) {
+        throw new ApiError(400, "Only pending orders can be approved");
+    }
+
+    ticketType.sold += order.quantity;
+    await ticketType.save();
+    event.ticketsSold += order.quantity;
+    await event.save();
+
+    const tickets=[]
+    for (let i = 0; i < order.quantity; i++) {
+        tickets.push({
+            ticketType: ticketType._id,
+            user: order.userId,
+            order:order._id,
+            event:event._id,
+            purchasePrice:ticketType.price,
+            qrCode: `TKY-${crypto.randomUUID()}`
+        });
+    }
+    await Ticket.insertMany(tickets);
+    order.status = OrderStatus.PAID;
+    order.paidAt = new Date();
+    await order.save();
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            order,
+            "Order approved successfully"
+        )
+    );
+});
+const getPendingOrders = asyncHandler(async (req, res) => {
+
+})
+export { createOrder, approveOrder, getPendingOrders };
