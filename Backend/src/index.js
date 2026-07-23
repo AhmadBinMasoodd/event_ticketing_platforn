@@ -11,9 +11,6 @@ const PORT=process.env.PORT || 8000;
 
 connectDB().then(async ()=>{
     await redisClient.connect();
-    await redisClient.set("username","ali")
-    const value = await redisClient.get("username");
-    console.log("Redis value:", value);
     app.listen(PORT, ()=>{
         console.log(`Server is running on port ${PORT}`);
     })
