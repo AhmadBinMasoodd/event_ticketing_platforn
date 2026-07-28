@@ -3,7 +3,7 @@ import ApiError from "../utils/apiError.js";
 import Event from "../models/event.model.js";
 import ApiResponse from "../utils/apiResponse.js";
 import Organizer from "../models/organizer.model.js";
-
+import ApiFeature from "../utils/apiFeature.js";
 
 const createEvent = asyncHandler(async (req, res) => {
     const {
@@ -53,21 +53,70 @@ const createEvent = asyncHandler(async (req, res) => {
         .status(201)
         .json(new ApiResponse(201, event, "Event created successfully"));
 });
-
 const getMyEvents = asyncHandler(async (req, res) => {
+    // Get all organizers owned by the logged-in user
     const organizers = await Organizer.find({
         owner: req.user._id,
     }).select("_id");
 
     const organizerIds = organizers.map((org) => org._id);
-
-    const events = await Event.find({
+    if(organizerIds.length === 0){
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                events = [],
+                pagination = {
+                    total: 0,
+                    page: 1,
+                    limit: 10,
+                    totalPages: 0,
+                    hasNextPage: false,
+                    hasPrevPage: false
+                },
+                "No events found"
+            )
+        );
+    }
+    // Base query (events owned by the organizer)
+    const baseQuery = {
         organizer: { $in: organizerIds },
-    }).populate("organizer");
+    };
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, events, "Events fetched successfully"));
+    // Apply API features
+    const features = new ApiFeature(
+        Event.find(baseQuery).populate("organizer"),
+        req.query
+    )
+        .filter()
+        .search(["title", "venue", "city"])
+        .sort()
+        .paginate();
+
+    // Merge base query with filters/search
+    const filterQuery = {
+        ...baseQuery,
+        ...features.getFilterQuery(),
+    };
+
+    // Total matching documents
+    const total = await Event.countDocuments(filterQuery);
+
+    // Fetch paginated events
+    const events = await features.query;
+
+    // Pagination metadata
+    const pagination = features.getPagination(total);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                events,
+                pagination,
+            },
+            "Events fetched successfully"
+        )
+    );
 });
 
 const getEventById = asyncHandler(async (req, res) => {

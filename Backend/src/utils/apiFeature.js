@@ -1,38 +1,45 @@
 class ApiFeature{
-    constructor(query,queryString){
-        this.query=query;
-        this.queryString=queryString
-    }
+    constructor(query, queryString) {
+    this.query = query;
+    this.queryString = queryString;
+    this.page = Number(queryString.page) || 1;
+    this.limit = Number(queryString.limit) || 10;
+    this.queryObj = {};
+}
 
     //search
-    search(searchField=[]){
-        if(this.queryString.search && searchField.length>0){
-            const keyword=this.queryString.search;
-            this.query=this.query.find({
-                $or:searchField.map((field)=>({
-                    [field]:{
-                        $regex:keyword,
-                        $options:"i"
-                    }
-                }))
-            })
-            return this;
+    search(searchFields = []) {
+        if (this.queryString.search && searchFields.length > 0) {
+
+            const keyword = this.queryString.search;
+
+            this.queryObj.$or = searchFields.map(field => ({
+                [field]: {
+                    $regex: keyword,
+                    $options: "i"
+                }
+            }));
+
+            this.query = this.query.find({
+                $or: this.queryObj.$or
+            });
         }
+
         return this;
     }
 
     //Filtering
-    filter(){
-        const queryObj={...this.queryString};
-        const excludedFields=[
+    filter() {
+        this.queryObj = { ...this.queryString };
+        const excludedFields = [
             "page",
             "limit",
             "sort",
             "order",
             "search"
-        ]
-        excludedFields.forEach((field)=>delete queryObj[field]);
-        this.query=this.query.find(queryObj);
+        ];
+        excludedFields.forEach(field => delete this.queryObj[field]);
+        this.query = this.query.find(this.queryObj);
         return this;
     }
 
@@ -46,12 +53,26 @@ class ApiFeature{
     }
 
     paginate(){
-        const page=Number(this.queryString.page) || 1;
-        const limit=Number(this.queryString.limit) || 10;
-        const skip=(page-1)*limit;
+        const skip=(this.page-1)*this.limit;
 
-        this.query=this.query.skip(skip).limit(limit);
+        this.query=this.query.skip(skip).limit(this.limit);
         return this;
+    }
+    getPagination(total) {
+        const totalPages = Math.ceil(total / this.limit);
+
+        return {
+            total,
+            page: this.page,
+            limit: this.limit,
+            totalPages,
+            hasNextPage: this.page < totalPages,
+            hasPrevPage: this.page > 1,
+        };
+    }
+
+    getFilterQuery() {
+        return this.queryObj;
     }
 }
 export default ApiFeature;
