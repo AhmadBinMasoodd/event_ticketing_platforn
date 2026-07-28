@@ -8,6 +8,7 @@ import { OrderStatus } from "../models/order.model.js";
 import Ticket from "../models/ticket.model.js";
 import Organizer from "../models/organizer.model.js";
 import crypto from "crypto";
+import ApiFeature from "../utils/apiFeature.js";
 const createOrder = asyncHandler(async (req, res) => {
     const {
         eventId,
@@ -200,55 +201,72 @@ const getOrders = asyncHandler(async (req, res) => {
         );
     }
 
-    // Get organizer events
-    const events = await Event.find({
+    // Get organizer event IDs
+    const eventIds = await Event.find({
         organizer: organizer._id,
-    }).select("_id");
-
-    const eventIds = events.map(event => event._id);
+    }).distinct("_id");
 
     if (eventIds.length === 0) {
         return res.status(200).json(
             new ApiResponse(
                 200,
-                [],
+                {
+                    orders: [],
+                    pagination: {
+                        total: 0,
+                        page: 1,
+                        limit: 10,
+                        totalPages: 0,
+                        hasNextPage: false,
+                        hasPrevPage: false,
+                    },
+                },
                 "You have not created any events yet"
             )
         );
     }
 
-    // Build query dynamically
-    const query = {
+    // Base query
+    const baseQuery = {
         eventId: { $in: eventIds },
     };
 
     if (status) {
-        query.status = status;
+        baseQuery.status = status;
     }
 
-    // Fetch orders
-    const orders = await Order.find(query)
-        .populate("userId", "name email phone")
-        .populate("eventId", "title eventDate venue city")
-        .populate("ticketTypeId", "name price")
-        .sort({ createdAt: -1 });
+    // Apply API Features
+    const features = new ApiFeature(
+        Order.find(baseQuery)
+            .populate("userId", "name email phone")
+            .populate("eventId", "title eventDate venue city")
+            .populate("ticketTypeId", "name price"),
+        req.query
+    )
+        .filter()
+        .search([])
+        .sort()
+        .paginate();
 
-    if (orders.length === 0) {
-        return res.status(200).json(
-            new ApiResponse(
-                200,
-                [],
-                status
-                    ? `No ${status} orders found`
-                    : "No orders found"
-            )
-        );
-    }
+    // Query for counting documents
+    const filterQuery = {
+        ...features.getFilterQuery(),
+        ...baseQuery,
+    };
+
+    const total = await Order.countDocuments(filterQuery);
+
+    const orders = await features.query;
+
+    const pagination = features.getPagination(total);
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            orders,
+            {
+                orders,
+                pagination,
+            },
             "Orders retrieved successfully"
         )
     );
