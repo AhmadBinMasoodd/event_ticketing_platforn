@@ -4,7 +4,9 @@ import Event from "../models/event.model.js";
 import ApiResponse from "../utils/apiResponse.js";
 import Organizer from "../models/organizer.model.js";
 import ApiFeature from "../utils/apiFeature.js";
-
+import { getCache, setCache, deleteCache,deleteCachePattern } from "../utils/cache.helper.js";
+import { CacheKeys } from "../utils/cache.keys.js";
+import { CACHE_TTL } from "../constants/cache.constants.js";
 const createEvent = asyncHandler(async (req, res) => {
     const {
         organizer,
@@ -49,40 +51,67 @@ const createEvent = asyncHandler(async (req, res) => {
         endTime,
         capacity,
     });
+    // Clear relevant cache patterns
+    await deleteCachePattern(`my-events:${req.user._id}*`);
+    await deleteCachePattern(`dashboard:organizer:${req.user._id}*`);
+    await deleteCachePattern(`published-events*`);
+
     return res
         .status(201)
         .json(new ApiResponse(201, event, "Event created successfully"));
 });
+
 const getMyEvents = asyncHandler(async (req, res) => {
-    // Get all organizers owned by the logged-in user
+    // Get organizers owned by the logged-in user
     const organizers = await Organizer.find({
         owner: req.user._id,
     }).select("_id");
 
     const organizerIds = organizers.map((org) => org._id);
-    if(organizerIds.length === 0){
+
+    // No organizer → return immediately
+    if (organizerIds.length === 0) {
         return res.status(200).json(
             new ApiResponse(
                 200,
-                events = [],
-                pagination = {
-                    total: 0,
-                    page: 1,
-                    limit: 10,
-                    totalPages: 0,
-                    hasNextPage: false,
-                    hasPrevPage: false
+                {
+                    events: [],
+                    pagination: {
+                        total: 0,
+                        page: Number(req.query.page) || 1,
+                        limit: Number(req.query.limit) || 10,
+                        totalPages: 0,
+                        hasNextPage: false,
+                        hasPrevPage: false,
+                    },
                 },
                 "No events found"
             )
         );
     }
-    // Base query (events owned by the organizer)
+
+    // Cache Key
+    const cacheKey = CacheKeys.myEvents(req.user._id, req.query);
+
+    // Check Redis
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Events fetched successfully (Redis Cache)"
+            )
+        );
+    }
+
+    // Base Query
     const baseQuery = {
         organizer: { $in: organizerIds },
     };
 
-    // Apply API features
+    // Apply API Features
     const features = new ApiFeature(
         Event.find(baseQuery).populate("organizer"),
         req.query
@@ -92,28 +121,33 @@ const getMyEvents = asyncHandler(async (req, res) => {
         .sort()
         .paginate();
 
-    // Merge base query with filters/search
+    // Merge filters
     const filterQuery = {
         ...baseQuery,
         ...features.getFilterQuery(),
     };
 
-    // Total matching documents
+    // Count matching documents
     const total = await Event.countDocuments(filterQuery);
 
-    // Fetch paginated events
+    // Fetch events
     const events = await features.query;
 
-    // Pagination metadata
+    // Pagination
     const pagination = features.getPagination(total);
+
+    const responseData = {
+        events,
+        pagination,
+    };
+
+    // Save response to Redis
+    await setCache(cacheKey, responseData, CACHE_TTL.MEDIUM);
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            {
-                events,
-                pagination,
-            },
+            responseData,
             "Events fetched successfully"
         )
     );
@@ -187,7 +221,12 @@ const updateEvent = asyncHandler(async (req, res) => {
     event.status = status ?? event.status;
 
     const updatedEvent = await event.save();
-
+    // Invalidate cache
+    await Promise.all([
+        deleteCachePattern(`my-events:${req.user._id}*`),
+        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
+        deleteCachePattern(`published-events*`),
+    ]);
     return res
         .status(200)
         .json(new ApiResponse(200, updatedEvent, "Event updated successfully"));
@@ -213,10 +252,17 @@ const deleteEvent = asyncHandler(async (req, res) => {
 
     await event.deleteOne();
 
+    // Invalidate cache
+    await Promise.all([
+        deleteCachePattern(`my-events:${req.user._id}*`),
+        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
+        deleteCachePattern(`published-events*`),
+    ]);
     return res
         .status(200)
         .json(new ApiResponse(200, null, "Event deleted successfully"));
 });
+
 const publishEvent = asyncHandler(async (req, res) => {
     // Get the eventId from the request parameters
     const { eventId } = req.params;
@@ -236,11 +282,17 @@ const publishEvent = asyncHandler(async (req, res) => {
 
     event.isPublished = true;
     const updatedEvent = await event.save();
-
+    // Invalidate cache for relevant keys
+    await Promise.all([
+        deleteCachePattern(`my-events:${req.user._id}*`),
+        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
+        deleteCachePattern(`published-events*`),
+    ]);
     return res
         .status(200)
         .json(new ApiResponse(200, updatedEvent, "Event published successfully"));
 });
+
 const unpublishEvent = asyncHandler(async (req, res) => {
     const { eventId } = req.params;
     // Find the event by its ID
@@ -258,89 +310,86 @@ const unpublishEvent = asyncHandler(async (req, res) => {
     }
     event.isPublished = false;
     const updatedEvent = await event.save();
-
+    // Invalidate cache for relevant keys
+    await Promise.all([
+        deleteCachePattern(`my-events:${req.user._id}*`),
+        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
+        deleteCachePattern(`published-events*`),
+    ]);
     return res
         .status(200)
         .json(new ApiResponse(200, updatedEvent, "Event unpublished successfully"));
 });
 
 const getPublishedEvents = asyncHandler(async (req, res) => {
-    // Read query parameters
-    const {
-        search = "",
-        city,
-        status,
-        sort = "eventDate",
-        order = "asc",
-        page = 1,
-        limit = 10,
-    } = req.query;
 
-    // Build dynamic query
-    const query = {
+    // Redis Cache Key
+    const cacheKey = CacheKeys.publishedEvents(req.query);
+
+    // Check Redis
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Published events fetched successfully (Redis Cache)"
+            )
+        );
+    }
+
+    // Base Query
+    const baseQuery = {
         isPublished: true,
     };
 
-    // Search by title or description
-    if (search) {
-        query.$or = [
-            {
-                title: {
-                    $regex: search,
-                    $options: "i",
-                },
-            },
-            {
-                description: {
-                    $regex: search,
-                    $options: "i",
-                },
-            },
-        ];
-    }
+    // Apply API Features
+    const features = new ApiFeature(
+        Event.find(baseQuery).populate("organizer"),
+        req.query
+    )
+        .filter()
+        .search(["title", "description", "venue", "city"])
+        .sort()
+        .paginate();
 
-    // Filter by city
-    if (city) {
-        query.city = city;
-    }
-
-    // Filter by status
-    if (status) {
-        query.status = status;
-    }
-
-    // Pagination
-    const pageNumber = Number(page);
-    const limitNumber = Number(limit);
-    const skip = (pageNumber - 1) * limitNumber;
-
-    // Sorting
-    const sortQuery = {
-        [sort]: order === "desc" ? -1 : 1,
+    // Merge Filters
+    const filterQuery = {
+        ...baseQuery,
+        ...features.getFilterQuery(),
     };
 
-    // Fetch events
-    const events = await Event.find(query)
-        .populate("organizer")
-        .sort(sortQuery)
-        .skip(skip)
-        .limit(limitNumber);
+    // Total Documents
+    const total = await Event.countDocuments(filterQuery);
 
-    // Total documents matching filters
-    const totalEvents = await Event.countDocuments(query);
+    // Fetch Events
+    const events = await features.query;
+
+    // Pagination
+    const pagination = features.getPagination(total);
+
+    // Response
+    const responseData = {
+        events,
+        pagination,
+    };
+
+    // Save Cache
+    await setCache(
+        cacheKey,
+        responseData,
+        CACHE_TTL.MEDIUM
+    );
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            {
-                events,
-                currentPage: pageNumber,
-                totalPages: Math.ceil(totalEvents / limitNumber),
-                totalEvents,
-                limit: limitNumber,
-            },
+            responseData,
             "Published events fetched successfully"
         )
     );
+
 });
+
 export { createEvent, getMyEvents, getEventById, updateEvent, deleteEvent, publishEvent, unpublishEvent, getPublishedEvents};

@@ -23,5 +23,12 @@ class RedisService {
     async exists(key){
         return await redisClient.exists(key);
     }
+    async deleteByPattern(pattern) {
+        const keys = await redisClient.keys(pattern);
+
+        if (keys.length > 0) {
+            await redisClient.del(keys);
+        }
+    }
 }
 export default new RedisService();
