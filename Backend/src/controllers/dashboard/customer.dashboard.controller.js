@@ -4,52 +4,75 @@ import ApiResponse from "../utils/apiResponse.js";
 import Ticket from "../models/ticket.model.js";
 import Order, { OrderStatus } from "../models/order.model.js";
 
+import { getCache, setCache } from "../utils/cache.helper.js";
+import { CacheKeys } from "../utils/cache.keys.js";
+import { CACHE_TTL } from "../config/constants.js";
+
 const getCustomerDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
-    // Total Tickets
-    const ticketCount = await Ticket.countDocuments({
-        user: userId,
-    });
+    // Redis Cache Key
+    const cacheKey = CacheKeys.customerDashboard(userId);
 
-    // Orders
-    const pendingOrdersCount = await Order.countDocuments({
-        userId,
-        status: OrderStatus.PENDING,
-    });
+    // Check Redis
+    const cachedData = await getCache(cacheKey);
 
-    const paidOrdersCount = await Order.countDocuments({
-        userId,
-        status: OrderStatus.PAID,
-    });
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Customer dashboard fetched successfully (Redis Cache)"
+            )
+        );
+    }
 
-    const cancelledOrdersCount = await Order.countDocuments({
-        userId,
-        status: OrderStatus.CANCELLED,
-    });
+    // Execute all independent queries in parallel
+    const [
+        ticketCount,
+        pendingOrdersCount,
+        paidOrdersCount,
+        cancelledOrdersCount,
+        paidOrders,
+        tickets,
+    ] = await Promise.all([
+        Ticket.countDocuments({
+            user: userId,
+        }),
 
-    // Total Money Spent
-    const paidOrders = await Order.find({
-        userId,
-        status: OrderStatus.PAID,
-    }).select("amount");
+        Order.countDocuments({
+            userId,
+            status: OrderStatus.PENDING,
+        }),
 
+        Order.countDocuments({
+            userId,
+            status: OrderStatus.PAID,
+        }),
+
+        Order.countDocuments({
+            userId,
+            status: OrderStatus.CANCELLED,
+        }),
+
+        Order.find({
+            userId,
+            status: OrderStatus.PAID,
+        }).select("amount"),
+
+        Ticket.find({
+            user: userId,
+        }).populate("event", "eventDate"),
+    ]);
+
+    // Calculate Total Spent
     const totalSpent = paidOrders.reduce(
         (sum, order) => sum + order.amount,
         0
     );
 
-    // Customer's Events
-    const tickets = await Ticket.find({
-        user: userId,
-    }).populate("event", "eventDate");
-
     const today = new Date();
 
-    let upcomingEventsCount = 0;
-    let pastEventsCount = 0;
-
-    // Prevent duplicate events
     const upcoming = new Set();
     const past = new Set();
 
@@ -63,21 +86,27 @@ const getCustomerDashboard = asyncHandler(async (req, res) => {
         }
     });
 
-    upcomingEventsCount = upcoming.size;
-    pastEventsCount = past.size;
+    const responseData = {
+        ticketCount,
+        upcomingEventsCount: upcoming.size,
+        pastEventsCount: past.size,
+        pendingOrdersCount,
+        paidOrdersCount,
+        cancelledOrdersCount,
+        totalSpent,
+    };
+
+    // Save to Redis
+    await setCache(
+        cacheKey,
+        responseData,
+        CACHE_TTL.MEDIUM
+    );
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            {
-                ticketCount,
-                upcomingEventsCount,
-                pastEventsCount,
-                pendingOrdersCount,
-                paidOrdersCount,
-                cancelledOrdersCount,
-                totalSpent,
-            },
+            responseData,
             "Customer dashboard fetched successfully"
         )
     );

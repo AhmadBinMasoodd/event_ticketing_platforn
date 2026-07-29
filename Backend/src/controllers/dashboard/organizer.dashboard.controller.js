@@ -7,134 +7,185 @@ import Event from "../models/event.model.js";
 import Ticket, { TicketStatus } from "../models/ticket.model.js";
 import Order, { OrderStatus } from "../models/order.model.js";
 
+import { getCache, setCache } from "../utils/cache.helper.js";
+import { CacheKeys } from "../utils/cache.keys.js";
+import { CACHE_TTL } from "../config/constants.js";
+
 const organizerDashboard = asyncHandler(async (req, res) => {
-    // Find organizer profile
+    const userId = req.user._id;
+
+    // Cache Key
+    const cacheKey = CacheKeys.organizerDashboard(userId);
+
+    // Check Redis
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Organizer dashboard fetched successfully (Redis Cache)"
+            )
+        );
+    }
+
+    // Verify Organizer
     const organizer = await Organizer.findOne({
-        owner: req.user._id,
+        owner: userId,
     });
 
     if (!organizer) {
         throw new ApiError(404, "Organizer profile not found");
     }
 
-    // Fetch organizer events once
+    // Get Organizer Events
     const events = await Event.find({
         organizer: organizer._id,
     }).select("_id");
 
     const eventIds = events.map((event) => event._id);
 
-    // If organizer has no events
+    // No Events
     if (eventIds.length === 0) {
+        const responseData = {
+            totalEvents: 0,
+            publishedEvents: 0,
+            unpublishedEvents: 0,
+            upcomingEvents: 0,
+            pastEvents: 0,
+            soldTickets: 0,
+            activeTickets: 0,
+            usedTickets: 0,
+            cancelledTickets: 0,
+            pendingOrders: 0,
+            paidOrders: 0,
+            totalRevenue: 0,
+        };
+
+        await setCache(
+            cacheKey,
+            responseData,
+            CACHE_TTL.MEDIUM
+        );
+
         return res.status(200).json(
             new ApiResponse(
                 200,
-                {
-                    totalEvents: 0,
-                    publishedEvents: 0,
-                    unpublishedEvents: 0,
-                    upcomingEvents: 0,
-                    pastEvents: 0,
-                    soldTickets: 0,
-                    activeTickets: 0,
-                    usedTickets: 0,
-                    cancelledTickets: 0,
-                    pendingOrders: 0,
-                    paidOrders: 0,
-                    totalRevenue: 0,
-                },
+                responseData,
                 "Dashboard fetched successfully"
             )
         );
     }
 
-    // Event Statistics
-    const totalEvents = await Event.countDocuments({
-        organizer: organizer._id,
-    });
+    const today = new Date();
 
-    const publishedEvents = await Event.countDocuments({
-        organizer: organizer._id,
-        isPublished: true,
-    });
+    // Execute all queries in parallel
+    const [
+        totalEvents,
+        publishedEvents,
+        unpublishedEvents,
+        upcomingEvents,
+        pastEvents,
+        soldTickets,
+        activeTickets,
+        usedTickets,
+        cancelledTickets,
+        pendingOrders,
+        paidOrders,
+        paidOrdersList,
+    ] = await Promise.all([
+        Event.countDocuments({
+            organizer: organizer._id,
+        }),
 
-    const unpublishedEvents = await Event.countDocuments({
-        organizer: organizer._id,
-        isPublished: false,
-    });
+        Event.countDocuments({
+            organizer: organizer._id,
+            isPublished: true,
+        }),
 
-    const upcomingEvents = await Event.countDocuments({
-        organizer: organizer._id,
-        eventDate: { $gt: new Date() },
-    });
+        Event.countDocuments({
+            organizer: organizer._id,
+            isPublished: false,
+        }),
 
-    const pastEvents = await Event.countDocuments({
-        organizer: organizer._id,
-        eventDate: { $lt: new Date() },
-    });
+        Event.countDocuments({
+            organizer: organizer._id,
+            eventDate: { $gt: today },
+        }),
 
-    // Ticket Statistics
-    const soldTickets = await Ticket.countDocuments({
-        event: { $in: eventIds },
-    });
+        Event.countDocuments({
+            organizer: organizer._id,
+            eventDate: { $lt: today },
+        }),
 
-    const activeTickets = await Ticket.countDocuments({
-        event: { $in: eventIds },
-        status: TicketStatus.ACTIVE,
-    });
+        Ticket.countDocuments({
+            event: { $in: eventIds },
+        }),
 
-    const usedTickets = await Ticket.countDocuments({
-        event: { $in: eventIds },
-        status: TicketStatus.USED,
-    });
+        Ticket.countDocuments({
+            event: { $in: eventIds },
+            status: TicketStatus.ACTIVE,
+        }),
 
-    const cancelledTickets = await Ticket.countDocuments({
-        event: { $in: eventIds },
-        status: TicketStatus.CANCELLED,
-    });
+        Ticket.countDocuments({
+            event: { $in: eventIds },
+            status: TicketStatus.USED,
+        }),
 
-    // Order Statistics
-    const pendingOrders = await Order.countDocuments({
-        eventId: { $in: eventIds },
-        status: OrderStatus.PENDING,
-    });
+        Ticket.countDocuments({
+            event: { $in: eventIds },
+            status: TicketStatus.CANCELLED,
+        }),
 
-    const paidOrders = await Order.countDocuments({
-        eventId: { $in: eventIds },
-        status: OrderStatus.PAID,
-    });
+        Order.countDocuments({
+            eventId: { $in: eventIds },
+            status: OrderStatus.PENDING,
+        }),
 
-    // Revenue
-    const paidOrdersData = await Order.find({
-        eventId: { $in: eventIds },
-        status: OrderStatus.PAID,
-    }).select("amount");
+        Order.countDocuments({
+            eventId: { $in: eventIds },
+            status: OrderStatus.PAID,
+        }),
 
-    const totalRevenue = paidOrdersData.reduce(
+        Order.find({
+            eventId: { $in: eventIds },
+            status: OrderStatus.PAID,
+        }).select("amount"),
+    ]);
+
+    // Calculate Revenue
+    const totalRevenue = paidOrdersList.reduce(
         (sum, order) => sum + order.amount,
         0
+    );
+
+    const responseData = {
+        totalEvents,
+        publishedEvents,
+        unpublishedEvents,
+        upcomingEvents,
+        pastEvents,
+        soldTickets,
+        activeTickets,
+        usedTickets,
+        cancelledTickets,
+        pendingOrders,
+        paidOrders,
+        totalRevenue,
+    };
+
+    // Cache Dashboard
+    await setCache(
+        cacheKey,
+        responseData,
+        CACHE_TTL.MEDIUM
     );
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            {
-                totalEvents,
-                publishedEvents,
-                unpublishedEvents,
-                upcomingEvents,
-                pastEvents,
-
-                soldTickets,
-                activeTickets,
-                usedTickets,
-                cancelledTickets,
-
-                pendingOrders,
-                paidOrders,
-
-                totalRevenue,
-            },
+            responseData,
             "Organizer dashboard fetched successfully"
         )
     );
