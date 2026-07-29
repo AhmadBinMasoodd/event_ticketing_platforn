@@ -6,31 +6,43 @@ import Organizer from "../models/organizer.model.js";
 import TicketType from "../models/ticket_type.model.js";
 import Ticket from "../models/ticket.model.js";
 import { TicketStatus } from "../models/ticket.model.js";
+import ApiFeature from "../utils/apiFeature.js";
 const getMyTickets = asyncHandler(async (req, res) => {
 
-    const tickets = await Ticket.find({
+    const baseQuery = {
         user: req.user._id,
-    })
-        .populate("event", "title eventDate venue city")
-        .populate("ticketType", "name price")
-        .populate("order", "status paidAt")
-        .sort({ createdAt: -1 });
+    };
 
-    if (tickets.length === 0) {
-        return res.status(200).json(
-            new ApiResponse(
-                200,
-                [],
-                "No tickets found"
-            )
-        );
-    }
+    const features = new ApiFeature(
+        Ticket.find(baseQuery)
+            .populate("event", "title eventDate venue city")
+            .populate("ticketType", "name price")
+            .populate("order", "status paidAt"),
+        req.query
+    )
+        .filter()
+        .sort()
+        .paginate();
+
+    const filterQuery = {
+        ...features.getFilterQuery(),
+        ...baseQuery,
+    };
+
+    const total = await Ticket.countDocuments(filterQuery);
+
+    const tickets = await features.query;
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            tickets,
-            "Tickets retrieved successfully"
+            {
+                tickets,
+                pagination: features.getPagination(total),
+            },
+            tickets.length
+                ? "Tickets retrieved successfully"
+                : "No tickets found"
         )
     );
 });
@@ -74,18 +86,37 @@ const getEventTickets = asyncHandler(async (req, res) => {
         );
     }
 
-    const tickets = await Ticket.find({
+    const baseQuery = {
         event: eventId,
-    })
-        .populate("user", "name email phone")
-        .populate("ticketType", "name price")
-        .populate("order", "status paidAt paymentMethod")
-        .sort({ createdAt: -1 });
+    };
+
+    const features = new ApiFeature(
+        Ticket.find(baseQuery)
+            .populate("user", "name email phone")
+            .populate("ticketType", "name price")
+            .populate("order", "status paidAt paymentMethod"),
+        req.query
+    )
+        .filter()
+        .sort()
+        .paginate();
+
+    const filterQuery = {
+        ...features.getFilterQuery(),
+        ...baseQuery,
+    };
+
+    const total = await Ticket.countDocuments(filterQuery);
+
+    const tickets = await features.query;
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            tickets,
+            {
+                tickets,
+                pagination: features.getPagination(total),
+            },
             tickets.length
                 ? "Tickets retrieved successfully"
                 : "No tickets found for this event"
