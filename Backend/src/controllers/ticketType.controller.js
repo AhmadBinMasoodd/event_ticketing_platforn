@@ -164,6 +164,7 @@ const updateTicketType = asyncHandler(async (req, res) => {
         )
     );
 });
+
 const deleteTicketType = asyncHandler(async (req, res) => {
     const { ticketTypeId } = req.params;
     const ticketType = await TicketType.findById(ticketTypeId).populate("event");
@@ -199,6 +200,7 @@ const deleteTicketType = asyncHandler(async (req, res) => {
         )
     );
 });
+
 const activateTicketType = asyncHandler(async (req, res) => {
     const { ticketTypeId } = req.params;
 
