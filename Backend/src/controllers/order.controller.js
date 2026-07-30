@@ -9,16 +9,15 @@ import Ticket from "../models/ticket.model.js";
 import Organizer from "../models/organizer.model.js";
 import crypto from "crypto";
 import ApiFeature from "../utils/apiFeature.js";
-import { getCache, setCache, deleteCachePattern } from "../utils/cache.helper.js";
+import {
+    getCache,
+    setCache,
+    deleteCachePattern,
+} from "../utils/cache.helper.js";
 import { CacheKeys } from "../utils/cache.keys.js";
 import { CACHE_TTL } from "../constants/cache.constants.js";
 const createOrder = asyncHandler(async (req, res) => {
-    const {
-        eventId,
-        ticketTypeId,
-        quantity,
-        paymentMethod,
-    } = req.body;
+    const { eventId, ticketTypeId, quantity, paymentMethod } = req.body;
 
     // Validate required fields
     if (!eventId || !ticketTypeId || !quantity || !paymentMethod) {
@@ -50,10 +49,7 @@ const createOrder = asyncHandler(async (req, res) => {
 
     // Ticket belongs to event
     if (ticketType.event.toString() !== eventId) {
-        throw new ApiError(
-            400,
-            "Ticket type does not belong to this event"
-        );
+        throw new ApiError(400, "Ticket type does not belong to this event");
     }
 
     // Ticket is active
@@ -106,34 +102,28 @@ const createOrder = asyncHandler(async (req, res) => {
         amount,
         paymentMethod,
     });
-    await deleteCachePattern(
-        `dashboard:customer:${req.user._id}`
-    );
+    await deleteCachePattern(`dashboard:customer:${req.user._id}`);
 
-    await deleteCachePattern(
-        `dashboard:organizer:*`
-    );
+    await deleteCachePattern(`dashboard:organizer:*`);
 
-    await deleteCachePattern(
-        `orders:*`
-    );
-    return res.status(201).json(
-        new ApiResponse(
-            201,
-            order,
-            "Order created successfully. Please complete your payment and wait for organizer approval."
-        )
-    );
+    await deleteCachePattern(`orders:*`);
+    return res
+        .status(201)
+        .json(
+            new ApiResponse(
+                201,
+                order,
+                "Order created successfully. Please complete your payment and wait for organizer approval."
+            )
+        );
 });
 
 const approveOrder = asyncHandler(async (req, res) => {
-
     const { orderId } = req.params;
 
     if (!orderId) {
         throw new ApiError(400, "Order ID is required");
     }
-
 
     const order = await Order.findById(orderId);
 
@@ -141,61 +131,36 @@ const approveOrder = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Order not found");
     }
 
-
     const event = await Event.findById(order.eventId);
 
     if (!event) {
         throw new ApiError(404, "Event not found");
     }
 
-
     const organizer = await Organizer.findOne({
         _id: event.organizer,
         owner: req.user._id,
     });
 
-
     if (!organizer) {
-        throw new ApiError(
-            403,
-            "You are not authorized to approve this order"
-        );
+        throw new ApiError(403, "You are not authorized to approve this order");
     }
 
-
-    const ticketType = await TicketType.findById(
-        order.ticketTypeId
-    );
-
+    const ticketType = await TicketType.findById(order.ticketTypeId);
 
     if (!ticketType) {
-        throw new ApiError(
-            404,
-            "Ticket type not found"
-        );
+        throw new ApiError(404, "Ticket type not found");
     }
 
-
-    const availableTickets =
-        ticketType.quantity - ticketType.sold;
-
+    const availableTickets = ticketType.quantity - ticketType.sold;
 
     if (availableTickets < order.quantity) {
-        throw new ApiError(
-            400,
-            "Not enough tickets available"
-        );
+        throw new ApiError(400, "Not enough tickets available");
     }
-
 
     if (order.status !== OrderStatus.PENDING) {
-        throw new ApiError(
-            400,
-            "Only pending orders can be approved"
-        );
+        throw new ApiError(400, "Only pending orders can be approved");
     }
-
-
 
     // Update ticket quantity
 
@@ -203,29 +168,18 @@ const approveOrder = asyncHandler(async (req, res) => {
 
     await ticketType.save();
 
-
-
     // Update event sales
 
     event.ticketsSold += order.quantity;
 
     await event.save();
 
-
-
     // Generate tickets
 
     const tickets = [];
 
-
-    for (
-        let i = 0;
-        i < order.quantity;
-        i++
-    ) {
-
+    for (let i = 0; i < order.quantity; i++) {
         tickets.push({
-
             ticketType: ticketType._id,
 
             user: order.userId,
@@ -236,17 +190,11 @@ const approveOrder = asyncHandler(async (req, res) => {
 
             purchasePrice: ticketType.price,
 
-            qrCode:
-            `TKY-${crypto.randomUUID()}`
-
+            qrCode: `TKY-${crypto.randomUUID()}`,
         });
-
     }
 
-
     await Ticket.insertMany(tickets);
-
-
 
     // Update order
 
@@ -256,58 +204,32 @@ const approveOrder = asyncHandler(async (req, res) => {
 
     await order.save();
 
-
-
     /*
         REDIS INVALIDATION
     */
 
-
     // Customer tickets cache
-    await deleteCachePattern(
-        `my-tickets:${order.userId}:*`
-    );
-
+    await deleteCachePattern(`my-tickets:${order.userId}:*`);
 
     // Customer dashboard cache
-    await deleteCachePattern(
-        `dashboard:customer:${order.userId}`
-    );
-
+    await deleteCachePattern(`dashboard:customer:${order.userId}`);
 
     // Organizer dashboard cache
-    await deleteCachePattern(
-        `dashboard:organizer:${req.user._id}`
-    );
-
+    await deleteCachePattern(`dashboard:organizer:${req.user._id}`);
 
     // Organizer orders cache
-    await deleteCachePattern(
-        `orders:${req.user._id}:*`
-    );
+    await deleteCachePattern(`orders:${req.user._id}:*`);
 
-
-
-    return res.status(200).json(
-
-        new ApiResponse(
-            200,
-            order,
-            "Order approved successfully"
-        )
-
-    );
-
+    return res
+        .status(200)
+        .json(new ApiResponse(200, order, "Order approved successfully"));
 });
 
 const getOrders = asyncHandler(async (req, res) => {
     const { status } = req.query;
-   
+
     // Validate status (if provided)
-    if (
-        status &&
-        !Object.values(OrderStatus).includes(status)
-    ) {
+    if (status && !Object.values(OrderStatus).includes(status)) {
         throw new ApiError(400, "Invalid order status");
     }
 
@@ -317,26 +239,22 @@ const getOrders = asyncHandler(async (req, res) => {
     });
 
     if (!organizer) {
-        throw new ApiError(
-            403,
-            "You are not authorized to view orders"
-        );
+        throw new ApiError(403, "You are not authorized to view orders");
     }
 
-     const cachedKey=CacheKeys.orders(
-        req.user._id,
-        req.query
-    )
+    const cachedKey = CacheKeys.orders(req.user._id, req.query);
     const cachedData = await getCache(cachedKey);
 
     if (cachedData) {
-        return res.status(200).json(
-            new ApiResponse(
-                200,
-                cachedData,
-                "Orders retrieved successfully (Redis Cache)"
-            )
-        );
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    cachedData,
+                    "Orders retrieved successfully (Redis Cache)"
+                )
+            );
     }
     // Get organizer event IDs
     const eventIds = await Event.find({
@@ -402,19 +320,13 @@ const getOrders = asyncHandler(async (req, res) => {
         orders,
         pagination,
     };
-    await setCache(
-        cachedKey,
-        responseData,
-        CACHE_TTL.MEDIUM
-    );
+    await setCache(cachedKey, responseData, CACHE_TTL.MEDIUM);
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            responseData,
-            "Orders retrieved successfully"
-        )
-    );
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, responseData, "Orders retrieved successfully")
+        );
 });
 
 export { createOrder, approveOrder, getOrders };
