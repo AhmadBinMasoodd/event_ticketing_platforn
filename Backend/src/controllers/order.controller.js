@@ -9,6 +9,9 @@ import Ticket from "../models/ticket.model.js";
 import Organizer from "../models/organizer.model.js";
 import crypto from "crypto";
 import ApiFeature from "../utils/apiFeature.js";
+import { getCache, setCache, deleteCachePattern } from "../utils/cache.helper.js";
+import { CacheKeys } from "../utils/cache.keys.js";
+import { CACHE_TTL } from "../constants/cache.constants.js";
 const createOrder = asyncHandler(async (req, res) => {
     const {
         eventId,
@@ -103,7 +106,17 @@ const createOrder = asyncHandler(async (req, res) => {
         amount,
         paymentMethod,
     });
+    await deleteCachePattern(
+        `dashboard:customer:${req.user._id}`
+    );
 
+    await deleteCachePattern(
+        `dashboard:organizer:*`
+    );
+
+    await deleteCachePattern(
+        `orders:*`
+    );
     return res.status(201).json(
         new ApiResponse(
             201,
@@ -114,18 +127,28 @@ const createOrder = asyncHandler(async (req, res) => {
 });
 
 const approveOrder = asyncHandler(async (req, res) => {
+
     const { orderId } = req.params;
-    if(!orderId) {
+
+    if (!orderId) {
         throw new ApiError(400, "Order ID is required");
     }
+
+
     const order = await Order.findById(orderId);
-    if(!order) {
+
+    if (!order) {
         throw new ApiError(404, "Order not found");
     }
+
+
     const event = await Event.findById(order.eventId);
-    if(!event) {
+
+    if (!event) {
         throw new ApiError(404, "Event not found");
     }
+
+
     const organizer = await Organizer.findOne({
         _id: event.organizer,
         owner: req.user._id,
@@ -133,54 +156,153 @@ const approveOrder = asyncHandler(async (req, res) => {
 
 
     if (!organizer) {
-        throw new ApiError(403, "You are not authorized to approve this order");
-    }
-    const ticketType = await TicketType.findById(order.ticketTypeId);
-    if(!ticketType) {
-        throw new ApiError(404, "Ticket type not found");
-    }
-    const availableTickets = ticketType.quantity - ticketType.sold;
-    if (availableTickets < order.quantity) {
-        throw new ApiError(400, "Not enough tickets available to approve this order");
+        throw new ApiError(
+            403,
+            "You are not authorized to approve this order"
+        );
     }
 
-    if(order.status !== OrderStatus.PENDING) {
-        throw new ApiError(400, "Only pending orders can be approved");
+
+    const ticketType = await TicketType.findById(
+        order.ticketTypeId
+    );
+
+
+    if (!ticketType) {
+        throw new ApiError(
+            404,
+            "Ticket type not found"
+        );
     }
+
+
+    const availableTickets =
+        ticketType.quantity - ticketType.sold;
+
+
+    if (availableTickets < order.quantity) {
+        throw new ApiError(
+            400,
+            "Not enough tickets available"
+        );
+    }
+
+
+    if (order.status !== OrderStatus.PENDING) {
+        throw new ApiError(
+            400,
+            "Only pending orders can be approved"
+        );
+    }
+
+
+
+    // Update ticket quantity
 
     ticketType.sold += order.quantity;
+
     await ticketType.save();
+
+
+
+    // Update event sales
+
     event.ticketsSold += order.quantity;
+
     await event.save();
 
-    const tickets=[]
-    for (let i = 0; i < order.quantity; i++) {
+
+
+    // Generate tickets
+
+    const tickets = [];
+
+
+    for (
+        let i = 0;
+        i < order.quantity;
+        i++
+    ) {
+
         tickets.push({
+
             ticketType: ticketType._id,
+
             user: order.userId,
-            order:order._id,
-            event:event._id,
-            purchasePrice:ticketType.price,
-            qrCode: `TKY-${crypto.randomUUID()}`
+
+            order: order._id,
+
+            event: event._id,
+
+            purchasePrice: ticketType.price,
+
+            qrCode:
+            `TKY-${crypto.randomUUID()}`
+
         });
+
     }
+
+
     await Ticket.insertMany(tickets);
+
+
+
+    // Update order
+
     order.status = OrderStatus.PAID;
+
     order.paidAt = new Date();
+
     await order.save();
 
+
+
+    /*
+        REDIS INVALIDATION
+    */
+
+
+    // Customer tickets cache
+    await deleteCachePattern(
+        `my-tickets:${order.userId}:*`
+    );
+
+
+    // Customer dashboard cache
+    await deleteCachePattern(
+        `dashboard:customer:${order.userId}`
+    );
+
+
+    // Organizer dashboard cache
+    await deleteCachePattern(
+        `dashboard:organizer:${req.user._id}`
+    );
+
+
+    // Organizer orders cache
+    await deleteCachePattern(
+        `orders:${req.user._id}:*`
+    );
+
+
+
     return res.status(200).json(
+
         new ApiResponse(
             200,
             order,
             "Order approved successfully"
         )
+
     );
+
 });
 
 const getOrders = asyncHandler(async (req, res) => {
     const { status } = req.query;
-
+   
     // Validate status (if provided)
     if (
         status &&
@@ -201,6 +323,21 @@ const getOrders = asyncHandler(async (req, res) => {
         );
     }
 
+     const cachedKey=CacheKeys.orders(
+        req.user._id,
+        req.query
+    )
+    const cachedData = await getCache(cachedKey);
+
+    if (cachedData) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Orders retrieved successfully (Redis Cache)"
+            )
+        );
+    }
     // Get organizer event IDs
     const eventIds = await Event.find({
         organizer: organizer._id,
@@ -260,13 +397,21 @@ const getOrders = asyncHandler(async (req, res) => {
 
     const pagination = features.getPagination(total);
 
+    // Cache the response
+    const responseData = {
+        orders,
+        pagination,
+    };
+    await setCache(
+        cachedKey,
+        responseData,
+        CACHE_TTL.MEDIUM
+    );
+
     return res.status(200).json(
         new ApiResponse(
             200,
-            {
-                orders,
-                pagination,
-            },
+            responseData,
             "Orders retrieved successfully"
         )
     );
