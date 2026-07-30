@@ -1,15 +1,15 @@
-import asyncHandler from "../utils/asyncHandler.js";
-import ApiResponse from "../utils/apiResponse.js";
-import ApiError from "../utils/apiError.js";
+import asyncHandler from "../../utils/asyncHandler.js";
+import ApiResponse from "../../utils/apiResponse.js";
+import ApiError from "../../utils/apiError.js";
 
-import Organizer from "../models/organizer.model.js";
-import Event from "../models/event.model.js";
-import Ticket, { TicketStatus } from "../models/ticket.model.js";
-import Order, { OrderStatus } from "../models/order.model.js";
+import Organizer from "../../models/organizer.model.js";
+import Event from "../../models/event.model.js";
+import Ticket, { TicketStatus } from "../../models/ticket.model.js";
+import Order, { OrderStatus } from "../../models/order.model.js";
 
-import { getCache, setCache } from "../utils/cache.helper.js";
-import { CacheKeys } from "../utils/cache.keys.js";
-import { CACHE_TTL } from "../config/constants.js";
+import { getCache, setCache } from "../../utils/cache.helper.js";
+import { CacheKeys } from "../../utils/cache.keys.js";
+import { CACHE_TTL } from "../../constants/cache.constants.js";
 
 const organizerDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;
@@ -191,4 +191,4 @@ const organizerDashboard = asyncHandler(async (req, res) => {
     );
 });
 
-export { organizerDashboard };
+export { organizerDashboard as getOrganizerDashboard };

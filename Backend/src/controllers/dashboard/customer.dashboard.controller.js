@@ -1,12 +1,12 @@
-import asyncHandler from "../utils/asyncHandler.js";
-import ApiResponse from "../utils/apiResponse.js";
+import asyncHandler from "../../utils/asyncHandler.js";
+import ApiResponse from "../../utils/apiResponse.js";
 
-import Ticket from "../models/ticket.model.js";
-import Order, { OrderStatus } from "../models/order.model.js";
+import Ticket from "../../models/ticket.model.js";
+import Order, { OrderStatus } from "../../models/order.model.js";
 
-import { getCache, setCache } from "../utils/cache.helper.js";
-import { CacheKeys } from "../utils/cache.keys.js";
-import { CACHE_TTL } from "../config/constants.js";
+import { getCache, setCache } from "../../utils/cache.helper.js";
+import { CacheKeys } from "../../utils/cache.keys.js";
+import { CACHE_TTL } from "../../constants/cache.constants.js";
 
 const getCustomerDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;

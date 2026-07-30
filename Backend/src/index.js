@@ -3,7 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import connectDB from "./db/index.js";
 import app from "./app.js";
-import redisClient from "./config/redis.js";
+import redisClient from "./config/redis.config.js";
 dotenv.config({path:"./.env"});
 import {DB_NAME} from "./constant.js";
 

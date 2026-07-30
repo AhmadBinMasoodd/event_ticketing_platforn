@@ -27,11 +27,15 @@ import eventRoutes from './routes/event.route.js';
 import TicketTypeRoutes from './routes/ticketType.route.js';
 import orderRoutes from './routes/order.route.js';
 import ticketRoutes from './routes/ticket.route.js';
+import customerDashboardRoutes from './routes/dashboard/customer.dashboard.router.js';
+import organizerDashboardRoutes from './routes/dashboard/organizer.dashboard.router.js';
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/organizers", organizerRoutes);
 app.use("/api/v1/events", eventRoutes);
 app.use("/api/v1/ticket-types", TicketTypeRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/tickets", ticketRoutes);
+app.use("/api/v1/dashboard/customer", customerDashboardRoutes);
+app.use("/api/v1/dashboard/organizer", organizerDashboardRoutes);
 
 export default app;
