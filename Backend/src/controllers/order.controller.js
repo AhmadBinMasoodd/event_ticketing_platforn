@@ -102,11 +102,11 @@ const createOrder = asyncHandler(async (req, res) => {
         amount,
         paymentMethod,
     });
-    await deleteCachePattern(`dashboard:customer:${req.user._id}`);
-
-    await deleteCachePattern(`dashboard:organizer:*`);
-
-    await deleteCachePattern(`orders:*`);
+    await Promise.all([
+        deleteCachePattern(CacheKeys.customerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(event.organizer.toString())),
+        deleteCachePattern(CacheKeys.orderPattern(event.organizer.toString())),
+    ]);
     return res
         .status(201)
         .json(
@@ -204,21 +204,17 @@ const approveOrder = asyncHandler(async (req, res) => {
 
     await order.save();
 
-    /*
-        REDIS INVALIDATION
-    */
+    //REDIS INVALIDATION
 
-    // Customer tickets cache
-    await deleteCachePattern(`my-tickets:${order.userId}:*`);
-
-    // Customer dashboard cache
-    await deleteCachePattern(`dashboard:customer:${order.userId}`);
-
-    // Organizer dashboard cache
-    await deleteCachePattern(`dashboard:organizer:${req.user._id}`);
-
-    // Organizer orders cache
-    await deleteCachePattern(`orders:${req.user._id}:*`);
+    await Promise.all([
+        deleteCachePattern(CacheKeys.ticketPattern(order.userId.toString())),
+        deleteCachePattern(CacheKeys.customerDashboardPattern(order.userId.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.orderPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.eventTicketsPattern(event._id.toString())),
+        deleteCachePattern(CacheKeys.eventPattern(event._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
 
     return res
         .status(200)

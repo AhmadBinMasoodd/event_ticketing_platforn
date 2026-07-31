@@ -213,10 +213,13 @@ const scanTicket = asyncHandler(async (req, res) => {
     await ticket.save();
 
     // CACHE INVALIDATION
-    await deleteCachePattern(`ticket:${ticket._id}*`);
-
-    await deleteCachePattern(`my-tickets:${ticket.user}:*`);
-    await deleteCachePattern(`event-tickets:${ticket.event}:*`);
+    await Promise.all([
+        deleteCachePattern(`ticket:${ticket._id}*`),
+        deleteCachePattern(`my-tickets:${ticket.user}:*`),
+        deleteCachePattern(`event-tickets:${ticket.event}:*`),
+        deleteCachePattern(`dashboard:customer:${ticket.user}*`),
+        deleteCachePattern(`dashboard:organizer:${req.user._id}*`)
+    ]);
     return res
         .status(200)
         .json(new ApiResponse(200, ticket, "Ticket scanned successfully"));

@@ -4,7 +4,8 @@ import Event from "../models/event.model.js";
 import ApiResponse from "../utils/apiResponse.js";
 import Organizer from "../models/organizer.model.js";
 import TicketType from "../models/ticket_type.model.js";
-
+import {deleteCachePattern} from "../utils/cache.helper.js";
+import { CacheKeys } from "../utils/cache.keys.js";
 const createTicketType = asyncHandler(async (req, res) => {
     const { event, name, description, price, quantity, saleEnd } = req.body;
     if(!event || !name || !price || !quantity || !saleEnd) {
@@ -33,6 +34,13 @@ const createTicketType = asyncHandler(async (req, res) => {
         quantity,
         saleEnd,
     });
+    await Promise.all([
+        deleteCachePattern(CacheKeys.eventPattern(event.toString())),
+        deleteCachePattern(CacheKeys.eventTicketsPattern(event.toString())),
+        deleteCachePattern(CacheKeys.ticketTypesPattern(event.toString())), // Missing
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
     return res
     .status(201)
     .json(
@@ -53,7 +61,21 @@ const getEventTicketTypes = asyncHandler(async (req, res) => {
     if(!organizer) {
         throw new ApiError(403, "You are not the owner of this event");
     }
+    const cacheKey=CacheKeys.ticketTypes(eventId);
+    const cachedData=await getCache(cacheKey);
+    if(cachedData) {
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                cachedData,
+                "Ticket types fetched successfully (Redis Cache)"
+            )
+        );
+    }
     const ticketTypes = await TicketType.find({ event: eventId });
+    await setCache(cacheKey, ticketTypes, CACHE_TTL.MEDIUM);
     if(ticketTypes.length === 0) {
         return res.status(200).json(new ApiResponse(200, [], "No ticket types found for this event"));
     }
@@ -67,7 +89,7 @@ const getEventTicketTypes = asyncHandler(async (req, res) => {
 const getTicketTypeById = asyncHandler(async (req, res) => {
     const { ticketTypeId } = req.params;
 
-    const ticketType = await TicketType.findById(ticketTypeId).populate("event");
+    const ticketType = await TicketType.findById(ticketTypeId).populate("event","organizer");
 
     if (!ticketType) {
         throw new ApiError(404, "Ticket type not found");
@@ -155,7 +177,13 @@ const updateTicketType = asyncHandler(async (req, res) => {
     }
 
     const savedTicketType = await ticketType.save();
-
+    await Promise.all([
+        deleteCachePattern(CacheKeys.eventPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.eventTicketsPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.ticketTypesPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
     return res.status(200).json(
         new ApiResponse(
             200,
@@ -191,7 +219,13 @@ const deleteTicketType = asyncHandler(async (req, res) => {
     }
 
     await ticketType.deleteOne();
-
+    await Promise.all([
+        deleteCachePattern(CacheKeys.eventPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.eventTicketsPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.ticketTypesPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
     return res.status(200).json(
         new ApiResponse(
             200,
@@ -225,7 +259,13 @@ const activateTicketType = asyncHandler(async (req, res) => {
     ticketType.isActive = true;
 
     const savedTicketType = await ticketType.save();
-
+    await Promise.all([
+        deleteCachePattern(CacheKeys.eventPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.eventTicketsPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.ticketTypesPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
     return res.status(200).json(
         new ApiResponse(
             200,
@@ -259,7 +299,13 @@ const deactivateTicketType = asyncHandler(async (req, res) => {
     ticketType.isActive = false;
 
     const savedTicketType = await ticketType.save();
-
+    await Promise.all([
+        deleteCachePattern(CacheKeys.eventPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.eventTicketsPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.ticketTypesPattern(ticketType.event._id.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
     return res.status(200).json(
         new ApiResponse(
             200,
