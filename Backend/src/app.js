@@ -1,6 +1,8 @@
 import express, { json } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import swaggerui from 'swagger-ui-express';
+import swaggerSpec from './docs/swagger.js';
 
 const app = express();
 app.use(cookieParser());
@@ -11,7 +13,9 @@ app.use(cors(
         credentials: true
     }
 ));
-
+app.use(
+"/api-docs", swaggerui.serve, swaggerui.setup(swaggerSpec)
+)
 app.use(express.urlencoded(
     {
         extended:true,
