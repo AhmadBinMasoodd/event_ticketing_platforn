@@ -4,7 +4,7 @@ import Event from "../models/event.model.js";
 import ApiResponse from "../utils/apiResponse.js";
 import Organizer from "../models/organizer.model.js";
 import ApiFeature from "../utils/apiFeature.js";
-import { getCache, setCache, deleteCache,deleteCachePattern } from "../utils/cache.helper.js";
+import {getCache,setCache,deleteCachePattern,} from "../utils/cache.helper.js";
 import { CacheKeys } from "../utils/cache.keys.js";
 import { CACHE_TTL } from "../constants/cache.constants.js";
 const createEvent = asyncHandler(async (req, res) => {
@@ -52,10 +52,13 @@ const createEvent = asyncHandler(async (req, res) => {
         capacity,
     });
     // Clear relevant cache patterns
-    await deleteCachePattern(`my-events:${req.user._id}*`);
-    await deleteCachePattern(`dashboard:organizer:${req.user._id}*`);
-    await deleteCachePattern(`published-events*`);
-
+    await Promise.all([
+        deleteCachePattern(CacheKeys.myEventsPattern(req.user._id.toString())),
+        deleteCachePattern(
+            CacheKeys.organizerDashboardPattern(req.user._id.toString())
+        ),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
+    ]);
     return res
         .status(201)
         .json(new ApiResponse(201, event, "Event created successfully"));
@@ -97,13 +100,15 @@ const getMyEvents = asyncHandler(async (req, res) => {
     const cachedData = await getCache(cacheKey);
 
     if (cachedData) {
-        return res.status(200).json(
-            new ApiResponse(
-                200,
-                cachedData,
-                "Events fetched successfully (Redis Cache)"
-            )
-        );
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    cachedData,
+                    "Events fetched successfully (Redis Cache)"
+                )
+            );
     }
 
     // Base Query
@@ -144,18 +149,30 @@ const getMyEvents = asyncHandler(async (req, res) => {
     // Save response to Redis
     await setCache(cacheKey, responseData, CACHE_TTL.MEDIUM);
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            responseData,
-            "Events fetched successfully"
-        )
-    );
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, responseData, "Events fetched successfully")
+        );
 });
 
 const getEventById = asyncHandler(async (req, res) => {
     const { eventId } = req.params;
+    const cacheKey = CacheKeys.event(eventId);
 
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    cachedData,
+                    "Event fetched successfully (Redis Cache)"
+                )
+            );
+    }
     const event = await Event.findById(eventId).populate("organizer");
 
     if (!event) {
@@ -170,7 +187,7 @@ const getEventById = asyncHandler(async (req, res) => {
     if (!organizer) {
         throw new ApiError(403, "You are not authorized to view this event");
     }
-
+    await setCache(cacheKey, event, CACHE_TTL.MEDIUM);
     return res
         .status(200)
         .json(new ApiResponse(200, event, "Event fetched successfully"));
@@ -223,9 +240,12 @@ const updateEvent = asyncHandler(async (req, res) => {
     const updatedEvent = await event.save();
     // Invalidate cache
     await Promise.all([
-        deleteCachePattern(`my-events:${req.user._id}*`),
-        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
-        deleteCachePattern(`published-events*`),
+        deleteCachePattern(CacheKeys.eventPattern(event._id.toString())),
+        deleteCachePattern(CacheKeys.myEventsPattern(req.user._id.toString())),
+        deleteCachePattern(
+            CacheKeys.organizerDashboardPattern(req.user._id.toString())
+        ),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
     ]);
     return res
         .status(200)
@@ -254,9 +274,12 @@ const deleteEvent = asyncHandler(async (req, res) => {
 
     // Invalidate cache
     await Promise.all([
-        deleteCachePattern(`my-events:${req.user._id}*`),
-        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
-        deleteCachePattern(`published-events*`),
+        deleteCachePattern(CacheKeys.eventPattern(event._id.toString())),
+        deleteCachePattern(CacheKeys.myEventsPattern(req.user._id.toString())),
+        deleteCachePattern(
+            CacheKeys.organizerDashboardPattern(req.user._id.toString())
+        ),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
     ]);
     return res
         .status(200)
@@ -284,13 +307,18 @@ const publishEvent = asyncHandler(async (req, res) => {
     const updatedEvent = await event.save();
     // Invalidate cache for relevant keys
     await Promise.all([
-        deleteCachePattern(`my-events:${req.user._id}*`),
-        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
-        deleteCachePattern(`published-events*`),
+        deleteCachePattern(CacheKeys.eventPattern(event._id.toString())),
+        deleteCachePattern(CacheKeys.myEventsPattern(req.user._id.toString())),
+        deleteCachePattern(
+            CacheKeys.organizerDashboardPattern(req.user._id.toString())
+        ),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
     ]);
     return res
         .status(200)
-        .json(new ApiResponse(200, updatedEvent, "Event published successfully"));
+        .json(
+            new ApiResponse(200, updatedEvent, "Event published successfully")
+        );
 });
 
 const unpublishEvent = asyncHandler(async (req, res) => {
@@ -306,23 +334,28 @@ const unpublishEvent = asyncHandler(async (req, res) => {
         owner: req.user._id,
     });
     if (!organizer) {
-        throw new ApiError(403, "You are not authorized to unpublish this event");
+        throw new ApiError(
+            403,
+            "You are not authorized to unpublish this event"
+        );
     }
     event.isPublished = false;
     const updatedEvent = await event.save();
     // Invalidate cache for relevant keys
     await Promise.all([
-        deleteCachePattern(`my-events:${req.user._id}*`),
-        deleteCachePattern(`dashboard:organizer:${req.user._id}*`),
-        deleteCachePattern(`published-events*`),
+        deleteCachePattern(CacheKeys.eventPattern(event._id.toString())),
+        deleteCachePattern(CacheKeys.myEventsPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.organizerDashboardPattern(req.user._id.toString())),
+        deleteCachePattern(CacheKeys.publishedEventsPattern()),
     ]);
     return res
         .status(200)
-        .json(new ApiResponse(200, updatedEvent, "Event unpublished successfully"));
+        .json(
+            new ApiResponse(200, updatedEvent, "Event unpublished successfully")
+        );
 });
 
 const getPublishedEvents = asyncHandler(async (req, res) => {
-
     // Redis Cache Key
     const cacheKey = CacheKeys.publishedEvents(req.query);
 
@@ -330,13 +363,15 @@ const getPublishedEvents = asyncHandler(async (req, res) => {
     const cachedData = await getCache(cacheKey);
 
     if (cachedData) {
-        return res.status(200).json(
-            new ApiResponse(
-                200,
-                cachedData,
-                "Published events fetched successfully (Redis Cache)"
-            )
-        );
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    cachedData,
+                    "Published events fetched successfully (Redis Cache)"
+                )
+            );
     }
 
     // Base Query
@@ -376,20 +411,26 @@ const getPublishedEvents = asyncHandler(async (req, res) => {
     };
 
     // Save Cache
-    await setCache(
-        cacheKey,
-        responseData,
-        CACHE_TTL.MEDIUM
-    );
+    await setCache(cacheKey, responseData, CACHE_TTL.MEDIUM);
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            responseData,
-            "Published events fetched successfully"
-        )
-    );
-
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                responseData,
+                "Published events fetched successfully"
+            )
+        );
 });
 
-export { createEvent, getMyEvents, getEventById, updateEvent, deleteEvent, publishEvent, unpublishEvent, getPublishedEvents};
+export {
+    createEvent,
+    getMyEvents,
+    getEventById,
+    updateEvent,
+    deleteEvent,
+    publishEvent,
+    unpublishEvent,
+    getPublishedEvents,
+};
