@@ -22,7 +22,9 @@ router.use(authorizeRoles(Roles.ORGANIZER))
  * /ticket-types:
  *   post:
  *     summary: Create a new ticket type
- *     tags: [Ticket Types]
+ *     description: Requires organizer role.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -60,9 +62,15 @@ router.use(authorizeRoles(Roles.ORGANIZER))
  *       201:
  *         description: Ticket type created successfully
  *       400:
- *         description: Validation error
+ *         description: All fields are required
+ *       401:
+ *         description: Unauthorized access
  *       403:
- *         description: Unauthorized
+ *         description: Not the owner of this event or organizer role required
+ *       404:
+ *         description: Event not found
+ *       409:
+ *         description: Ticket type with this name already exists for this event
  */
 router.route("/")
     .post(createTicketType);
@@ -73,7 +81,9 @@ router.route("/")
  * /ticket-types/event/{eventId}:
  *   get:
  *     summary: Get all ticket types of an event
- *     tags: [Ticket Types]
+ *     description: Requires organizer role.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -84,7 +94,11 @@ router.route("/")
  *           type: string
  *     responses:
  *       200:
- *         description: Ticket types fetched successfully
+ *         description: Ticket types fetched successfully or no ticket types found for this event
+ *       401:
+ *         description: Unauthorized access
+ *       403:
+ *         description: Not the owner of this event or organizer role required
  *       404:
  *         description: Event not found
  */
@@ -97,7 +111,9 @@ router.route("/event/:eventId")
  * /ticket-types/{ticketTypeId}:
  *   get:
  *     summary: Get ticket type by ID
- *     tags: [Ticket Types]
+ *     description: Requires organizer role. Returns ticket type with populated event organizer.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -109,15 +125,17 @@ router.route("/event/:eventId")
  *     responses:
  *       200:
  *         description: Ticket type fetched successfully
+ *       401:
+ *         description: Unauthorized access
+ *       403:
+ *         description: Not the owner of this event or organizer role required
  *       404:
  *         description: Ticket type not found
- */
-/**
- * @swagger
- * /ticket-types/{ticketTypeId}:
  *   patch:
  *     summary: Update ticket type
- *     tags: [Ticket Types]
+ *     description: Requires organizer role.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -127,7 +145,6 @@ router.route("/event/:eventId")
  *         schema:
  *           type: string
  *     requestBody:
- *       required: false
  *       content:
  *         application/json:
  *           schema:
@@ -147,15 +164,21 @@ router.route("/event/:eventId")
  *     responses:
  *       200:
  *         description: Ticket type updated successfully
+ *       400:
+ *         description: Quantity cannot be less than sold tickets
+ *       401:
+ *         description: Unauthorized access
+ *       403:
+ *         description: Not authorized to update this ticket type or organizer role required
  *       404:
  *         description: Ticket type not found
- */
-/**
- * @swagger
- * /ticket-types/{ticketTypeId}:
+ *       409:
+ *         description: Ticket type with this name already exists for this event
  *   delete:
  *     summary: Delete ticket type
- *     tags: [Ticket Types]
+ *     description: Requires organizer role.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -168,7 +191,11 @@ router.route("/event/:eventId")
  *       200:
  *         description: Ticket type deleted successfully
  *       400:
- *         description: Tickets already sold
+ *         description: Cannot delete a ticket type after tickets have been sold
+ *       401:
+ *         description: Unauthorized access
+ *       403:
+ *         description: Not authorized to delete this ticket type or organizer role required
  *       404:
  *         description: Ticket type not found
  */
@@ -184,7 +211,9 @@ router.route("/:ticketTypeId")
  * /ticket-types/{ticketTypeId}/activate:
  *   patch:
  *     summary: Activate a ticket type
- *     tags: [Ticket Types]
+ *     description: Requires organizer role.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -196,6 +225,10 @@ router.route("/:ticketTypeId")
  *     responses:
  *       200:
  *         description: Ticket type activated successfully
+ *       401:
+ *         description: Unauthorized access
+ *       403:
+ *         description: Not authorized to activate this ticket type or organizer role required
  *       404:
  *         description: Ticket type not found
  */
@@ -206,7 +239,9 @@ router.route("/:ticketTypeId/activate")
  * /ticket-types/{ticketTypeId}/deactivate:
  *   patch:
  *     summary: Deactivate a ticket type
- *     tags: [Ticket Types]
+ *     description: Requires organizer role.
+ *     tags:
+ *       - Ticket Types
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -218,6 +253,10 @@ router.route("/:ticketTypeId/activate")
  *     responses:
  *       200:
  *         description: Ticket type deactivated successfully
+ *       401:
+ *         description: Unauthorized access
+ *       403:
+ *         description: Not authorized to deactivate this ticket type or organizer role required
  *       404:
  *         description: Ticket type not found
  */

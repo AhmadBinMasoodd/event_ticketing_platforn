@@ -46,6 +46,12 @@ router.use(verifyJWT);
  *     responses:
  *       201:
  *         description: Organizer created successfully
+ *       400:
+ *         description: All fields are required
+ *       401:
+ *         description: Unauthorized access
+ *       409:
+ *         description: Organization with same details already exists
  *
  *   get:
  *     summary: Get all organizers of current user
@@ -55,7 +61,9 @@ router.use(verifyJWT);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Organizers retrieved successfully
+ *         description: Organizers fetched successfully or no organizers found for this user
+ *       401:
+ *         description: Unauthorized access
  */
 router.route("/").post(createOrganizer).get(getMyOrganizers);
 
@@ -76,13 +84,11 @@ router.route("/").post(createOrganizer).get(getMyOrganizers);
  *           type: string
  *     responses:
  *       200:
- *         description: Organizer retrieved successfully
+ *         description: Organizer fetched successfully
+ *       401:
+ *         description: Unauthorized access
  *       404:
  *         description: Organizer not found
- */
-/**
- * @swagger
- * /organizers/{organizerId}:
  *   patch:
  *     summary: Update organizer
  *     tags:
@@ -101,13 +107,26 @@ router.route("/").post(createOrganizer).get(getMyOrganizers);
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               businessName:
+ *                 type: string
+ *               businessEmail:
+ *                 type: string
+ *               businessPhone:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               city:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Organizer updated successfully
- */
-/**
- * @swagger
- * /organizers/{organizerId}:
+ *       400:
+ *         description: At least one field is required to update
+ *       401:
+ *         description: Unauthorized access
+ *       404:
+ *         description: Organizer not found
  *   delete:
  *     summary: Delete organizer
  *     tags:
@@ -123,6 +142,10 @@ router.route("/").post(createOrganizer).get(getMyOrganizers);
  *     responses:
  *       200:
  *         description: Organizer deleted successfully
+ *       401:
+ *         description: Unauthorized access
+ *       404:
+ *         description: Organizer not found
  */
 router.route("/:organizerId").get(getOrganizerById).patch(updateOrganizer).delete(deleteOrganizer);
 

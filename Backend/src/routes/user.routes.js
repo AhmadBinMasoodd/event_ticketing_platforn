@@ -20,6 +20,7 @@ const router = Router();
  *     summary: Register a new user
  *     tags:
  *       - Users
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -30,6 +31,7 @@ const router = Router();
  *               - name
  *               - email
  *               - password
+ *               - phone
  *             properties:
  *               name:
  *                 type: string
@@ -37,9 +39,13 @@ const router = Router();
  *                 type: string
  *               password:
  *                 type: string
+ *               phone:
+ *                 type: string
  *     responses:
  *       201:
  *         description: User registered successfully
+ *       409:
+ *         description: Email or phone number already registered
  */
 router.route("/register").post(registerUser);
 /**
@@ -49,6 +55,7 @@ router.route("/register").post(registerUser);
  *     summary: Login user
  *     tags:
  *       - Users
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -67,7 +74,11 @@ router.route("/register").post(registerUser);
  *                 example: Ahmad123@
  *     responses:
  *       200:
- *         description: Login successful
+ *         description: User logged in successfully
+ *       400:
+ *         description: Email and password are required
+ *       404:
+ *         description: User not found
  *       401:
  *         description: Invalid credentials
  */
@@ -83,9 +94,9 @@ router.route("/login").post(loginUser);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Logout successful
+ *         description: User logged out successfully
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized access
  */
 router.route("/logout").post(verifyJWT, logoutUser);
 /**
@@ -99,7 +110,9 @@ router.route("/logout").post(verifyJWT, logoutUser);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Current user details
+ *         description: Current user fetched successfully
+ *       401:
+ *         description: Unauthorized access
  */
 router.route("/current-user").get(verifyJWT, getCurrentUser);
 /**
@@ -107,11 +120,15 @@ router.route("/current-user").get(verifyJWT, getCurrentUser);
  * /users/refresh-access-token:
  *   get:
  *     summary: Refresh access token
+ *     description: Reads the refresh token from the refreshToken cookie and returns a new access token.
  *     tags:
  *       - Users
+ *     security: []
  *     responses:
  *       200:
- *         description: New access token generated
+ *         description: Access token refreshed successfully
+ *       401:
+ *         description: Unauthorized, refresh token missing or invalid
  */
 router.route("/refresh-access-token").get(refreshAccessToken);
 /**
@@ -130,16 +147,27 @@ router.route("/refresh-access-token").get(refreshAccessToken);
  *           schema:
  *             type: object
  *             required:
- *               - oldPassword
+ *               - currentPassword
  *               - newPassword
+ *               - confirmPassword
  *             properties:
- *               oldPassword:
+ *               currentPassword:
  *                 type: string
  *               newPassword:
  *                 type: string
+ *               confirmPassword:
+ *                 type: string
  *     responses:
  *       200:
- *         description: Password updated
+ *         description: Password updated successfully
+ *       400:
+ *         description: All fields are required, passwords do not match, or new password is same as current password
+ *       401:
+ *         description: Current password is incorrect or unauthorized access
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error while updating password
  */
 router.route("/update-password").patch(verifyJWT, updatePassword);
 /**
@@ -151,9 +179,32 @@ router.route("/update-password").patch(verifyJWT, updatePassword);
  *       - Users
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phone:
+ *                 type: string
  *     responses:
  *       200:
- *         description: User updated
+ *         description: User updated successfully
+ *       400:
+ *         description: At least one field is required to update
+ *       401:
+ *         description: Unauthorized access
+ *       404:
+ *         description: User not found
+ *       409:
+ *         description: Email or phone already exists
+ *       500:
+ *         description: Error while updating user
  */
 router.route("/update-user").patch(verifyJWT, updateUser);
 /**
@@ -167,7 +218,11 @@ router.route("/update-user").patch(verifyJWT, updateUser);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: User deleted
+ *         description: User deleted successfully
+ *       401:
+ *         description: Unauthorized access
+ *       404:
+ *         description: User not found
  */
 router.route("/delete-user").delete(verifyJWT, deleteUser);
 export default router;

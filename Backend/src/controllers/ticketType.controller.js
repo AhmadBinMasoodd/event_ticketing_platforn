@@ -4,8 +4,9 @@ import Event from "../models/event.model.js";
 import ApiResponse from "../utils/apiResponse.js";
 import Organizer from "../models/organizer.model.js";
 import TicketType from "../models/ticket_type.model.js";
-import {deleteCachePattern} from "../utils/cache.helper.js";
+import {getCache,setCache,deleteCachePattern} from "../utils/cache.helper.js";
 import { CacheKeys } from "../utils/cache.keys.js";
+import { CACHE_TTL } from "../constants/cache.constants.js";
 const createTicketType = asyncHandler(async (req, res) => {
     const { event, name, description, price, quantity, saleEnd } = req.body;
     if(!event || !name || !price || !quantity || !saleEnd) {

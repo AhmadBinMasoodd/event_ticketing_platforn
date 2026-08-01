@@ -10,7 +10,7 @@ const options = {
         },
         servers: [
             {
-                url: "http://localhost:8000/api/v1",
+                url: "http://localhost:5000/api/v1",
                 description: "Development Server",
             },
         ],
@@ -23,11 +23,6 @@ const options = {
                 },
             },
         },
-        security: [
-            {
-                bearerAuth: [],
-            },
-        ],
     },
 
     apis: ["./src/routes/**/*.js"], // routes containing Swagger comments

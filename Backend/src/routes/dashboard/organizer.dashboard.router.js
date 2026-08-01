@@ -11,17 +11,20 @@ const router = Router();
  * /dashboard/organizer:
  *   get:
  *     summary: Get organizer dashboard statistics
- *     description: Returns dashboard information for the logged-in organizer, including events, ticket sales, orders, and revenue.
- *     tags: [Organizer Dashboard]
+ *     description: Requires organizer role. Returns event, ticket, order, and revenue counts for the logged-in organizer.
+ *     tags:
+ *       - Organizer Dashboard
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Organizer dashboard retrieved successfully
+ *         description: Organizer dashboard fetched successfully
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized access
  *       403:
- *         description: Access denied (Organizer role required)
+ *         description: Organizer role required
+ *       404:
+ *         description: Organizer profile not found
  */
 router
     .route("/")

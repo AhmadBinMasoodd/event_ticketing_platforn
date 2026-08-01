@@ -9,17 +9,18 @@ const router = Router();
  * /dashboard/customer:
  *   get:
  *     summary: Get customer dashboard statistics
- *     description: Returns dashboard information for the logged-in customer, including orders, tickets, and recent activity.
- *     tags: [Customer Dashboard]
+ *     description: Requires customer role. Returns ticket counts, order counts, and total spent for the logged-in customer.
+ *     tags:
+ *       - Customer Dashboard
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Customer dashboard retrieved successfully
+ *         description: Customer dashboard fetched successfully
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized access
  *       403:
- *         description: Access denied (Customer role required)
+ *         description: Customer role required
  */
 router.route("/")
     .get(
