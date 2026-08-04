@@ -1,6 +1,6 @@
 # Event Ticketing Platform - Backend API
 
-A robust, secure, and scalable RESTful API for an **Event Ticketing & Management Platform** built using Node.js, Express, MongoDB, and JSON Web Token (JWT) authentication.
+A RESTful API for an **Event Ticketing & Management Platform** built with Node.js, Express, MongoDB, Redis, and JWT authentication. The backend covers user auth, organizer onboarding, event and ticket management, order approval, QR-based gate scanning, role-based dashboards, and Swagger API docs.
 
 ---
 
@@ -12,14 +12,14 @@ A robust, secure, and scalable RESTful API for an **Event Ticketing & Management
   * Password encryption using `bcryptjs`.
   * User profile management (registration, login, profile updates, password changes).
 
-* **Organizer & Venue Management**:
+* **Organizer Management**:
   * Business profile creation for event hosts (automatically upgrades user role to `organizer`).
-  * Organizer verification status tracking and multi-organization support per account.
+  * Organizer profile CRUD and multi-organization support per account.
 
 * **Event Management & Discovery**:
   * Comprehensive Event CRUD operations (Title, Description, Date/Time, Venue, City, Capacity).
   * Event publishing/unpublishing lifecycle control.
-  * Public event discovery API with full-text title/description search regex, filtering by city and status, dynamic pagination, and custom sorting.
+  * Public event discovery API with title/description search, filtering by city and status, dynamic pagination, and custom sorting.
 
 * **Ticket Tier & Pricing Management**:
   * Customizable ticket tiers (`VIP`, `Standard`, `Student`).
@@ -34,6 +34,13 @@ A robust, secure, and scalable RESTful API for an **Event Ticketing & Management
   * Automatic generation of unique ticket QR codes (`TKY-<UUID>`) on approval.
   * Venue entrance QR code scanner endpoint that verifies ticket validity, prevents reuse/double-entry, and logs scanner user ID & timestamp.
 
+* **Dashboards & Caching**:
+  * Customer and organizer dashboards backed by Redis cache.
+  * Cached summary metrics for tickets, orders, events, and revenue.
+
+* **API Documentation**:
+  * Swagger UI available at `/api-docs`.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -43,6 +50,7 @@ A robust, secure, and scalable RESTful API for an **Event Ticketing & Management
 * **Database**: MongoDB with Mongoose ODM (v9)
 * **Authentication**: `jsonwebtoken` (JWT) + `cookie-parser`
 * **Validation**: `validator.js`
+* **Cache**: `redis`
 * **Security & Utility**: `bcryptjs`, `cors`, `dotenv`, `crypto`
 * **Dev Tooling**: `nodemon`, `prettier`
 
@@ -54,15 +62,24 @@ A robust, secure, and scalable RESTful API for an **Event Ticketing & Management
 Event Ticketing Platform/
 ├── Backend/
 │   ├── src/
+│   │   ├── config/              # Redis configuration
+│   │   │   └── redis.config.js
+│   │   ├── constants/           # Shared cache constants
+│   │   │   └── cache.constants.js
 │   │   ├── controllers/         # Business logic for all modules
 │   │   │   ├── event.controller.js
 │   │   │   ├── order.controller.js
 │   │   │   ├── organizer.controller.js
+│   │   │   ├── dashboard/
+│   │   │   │   ├── customer.dashboard.controller.js
+│   │   │   │   └── organizer.dashboard.controller.js
 │   │   │   ├── ticket.controller.js
 │   │   │   ├── ticketType.controller.js
 │   │   │   └── user.controller.js
 │   │   ├── db/                  # Database connection logic
 │   │   │   └── index.js
+│   │   ├── docs/                # Swagger setup
+│   │   │   └── swagger.js
 │   │   ├── middlewares/         # Auth & authorization middlewares
 │   │   │   └── auth.middleware.js
 │   │   ├── models/              # Mongoose data schemas
@@ -70,18 +87,22 @@ Event Ticketing Platform/
 │   │   │   ├── order.model.js
 │   │   │   ├── organizer.model.js
 │   │   │   ├── scanlog.model.js
-│   │   │   ├── ticket.model.js
+│   │   │   ├── ticket_type.model.js
 │   │   │   ├── ticket_type.model.js
 │   │   │   └── user.model.js
 │   │   ├── routes/              # Express API route endpoints
 │   │   │   ├── event.route.js
 │   │   │   ├── order.route.js
 │   │   │   ├── organizer.routes.js
+│   │   │   ├── dashboard/
+│   │   │   │   ├── customer.dashboard.router.js
+│   │   │   │   └── organizer.dashboard.router.js
 │   │   │   ├── ticket.route.js
 │   │   │   ├── ticketType.route.js
 │   │   │   └── user.routes.js
 │   │   ├── seed/                # Seed script for demo data
 │   │   │   └── seed.js
+│   │   ├── services/            # Redis helper services
 │   │   ├── utils/               # Custom wrappers (ApiError, ApiResponse, asyncHandler)
 │   │   ├── app.js               # Express application middleware setup
 │   │   ├── constant.js          # App-wide constants (e.g. DB_NAME)
@@ -102,6 +123,10 @@ Create a `.env` file inside the `Backend/` directory with the following variable
 PORT=5000
 MONGODB_URL=mongodb+srv://<username>:<password>@cluster.mongodb.net/
 CORS_ORIGIN=*
+REDIS_URL=redis://localhost:6379
+# or use:
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
 ACCESS_TOKEN_SECRET=your_access_token_secret_key
 ACCESS_TOKEN_EXPIRY=1d
 REFRESH_TOKEN_SECRET=your_refresh_token_secret_key
@@ -125,6 +150,8 @@ REFRESH_TOKEN_EXPIRY=7d
 ## 📡 API Reference Overview
 
 Base Path: `/api/v1`
+
+Swagger UI: `/api-docs`
 
 ### 1. Authentication & User Routes (`/api/v1/users`)
 | Method | Endpoint | Access | Description |
@@ -152,7 +179,7 @@ Base Path: `/api/v1`
 | :--- | :--- | :--- | :--- |
 | `POST` | `/` | Organizer | Create a new event |
 | `GET` | `/` | Organizer | Get all events belonging to logged-in organizer |
-| `GET` | `/published` or `/public` | Public / Auth | Search & filter published events (Query params: `search`, `city`, `status`, `sort`, `order`, `page`, `limit`) |
+| `GET` | `/public` | Public | Search & filter published events (Query params: `search`, `city`, `status`, `sort`, `order`, `page`, `limit`) |
 | `GET` | `/:eventId` | Organizer | Get event details by ID |
 | `PATCH` | `/:eventId` | Organizer | Update event information |
 | `DELETE` | `/:eventId` | Organizer | Delete an event |
@@ -185,6 +212,12 @@ Base Path: `/api/v1`
 | `GET` | `/event/:eventId` | Organizer | View all issued tickets for an event |
 | `POST` | `/scan/:qrCode` | Organizer | Gate check-in: Scan QR code and mark ticket status as `used` |
 
+### 7. Dashboard Routes (`/api/v1/dashboard`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/customer` | Customer | Customer stats: ticket count, order counts, event counts, and total spent |
+| `GET` | `/organizer` | Organizer | Organizer stats: event counts, ticket counts, order counts, and total revenue |
+
 ---
 
 ## ⚡ Getting Started
@@ -213,6 +246,9 @@ Base Path: `/api/v1`
   ```bash
   npm run dev
   ```
+
+* **API documentation**:
+  * Open `http://localhost:5000/api-docs` after the server starts.
 
 ### Database Seeding
 
